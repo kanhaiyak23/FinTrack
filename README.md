@@ -1,117 +1,77 @@
 # FinTrack
 
-A personal finance tracking API. Register a user, create accounts, record income and
-expenses against them, and pull spending summaries broken down by category.
+Transaction analytics and reporting platform. A modular-monolith REST API with separate
+background workers, built to demonstrate transactional correctness, asynchronous
+processing, caching and horizontal scaling.
 
-Built with Node.js and Express. Data lives in an in-memory store, so it resets on
-restart — swapping in a real database means reimplementing `src/models/store.js`
-and nothing else.
+**Status: in development.** Workstream A (foundation) complete. See
+[`docs/progress.md`](docs/progress.md) for what is built and what is not.
+
+## Stack
+
+Node.js · Express · PostgreSQL · MongoDB · Redis · BullMQ · Prisma · Docker · Nginx
+
+PostgreSQL is the source of truth. Redis is a cache and the queue backend. MongoDB holds
+activity events and report snapshots. Reasoning for each is in
+[`docs/decisions.md`](docs/decisions.md).
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20+
+- A container runtime. This project is developed against [Colima](https://github.com/abiosoft/colima):
+  ```bash
+  brew install colima docker docker-compose
+  colima start --cpu 4 --memory 4 --disk 40
+  ```
 
-## Getting started
+## Running it
 
 ```bash
 npm install
-cp .env.example .env     # then set JWT_SECRET
-npm run dev              # or: npm start
+cp .env.example .env
+# set JWT_SECRET - at least 32 chars:  openssl rand -hex 32
+
+docker compose up -d        # postgres, mongodb, redis
+npx prisma migrate deploy   # apply migrations
+npm run dev:api             # API on :4000
 ```
 
-The API starts on `http://localhost:3000`. Check it with:
+Check it:
 
 ```bash
-curl http://localhost:3000/health
+curl -s http://localhost:4000/health | jq
 ```
 
-## Configuration
-
-| Variable | Default | Notes |
-| --- | --- | --- |
-| `PORT` | `3000` | Port the server binds to |
-| `NODE_ENV` | `development` | `production` makes `JWT_SECRET` mandatory |
-| `JWT_SECRET` | dev-only fallback | Generate with `openssl rand -hex 32` |
-| `JWT_EXPIRES_IN` | `7d` | Any [ms](https://github.com/vercel/ms) duration |
-
-## API
-
-All `/api/accounts` and `/api/transactions` routes require an
-`Authorization: Bearer <token>` header. Tokens come from register or login.
-
-### Auth
-
-| Method | Path | Body |
-| --- | --- | --- |
-| `POST` | `/api/auth/register` | `email`, `name`, `password` (min 8 chars) |
-| `POST` | `/api/auth/login` | `email`, `password` |
-| `GET` | `/api/auth/me` | — |
-
-### Accounts
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/api/accounts` | Each account includes a computed `balance` |
-| `POST` | `/api/accounts` | `name`, `type`, optional `currency`, `openingBalance` |
-| `GET` | `/api/accounts/:id` | |
-| `DELETE` | `/api/accounts/:id` | Also deletes the account's transactions |
-
-`type` is one of `checking`, `savings`, `credit`, `cash`, `investment`.
-
-### Transactions
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/api/transactions` | Filters: `accountId`, `category`, `from`, `to` |
-| `POST` | `/api/transactions` | `accountId`, `amount`, `type`, `category`, optional `note`, `occurredAt` |
-| `GET` | `/api/transactions/summary` | Totals and per-category breakdown; accepts `from`, `to` |
-| `GET` | `/api/transactions/:id` | |
-| `DELETE` | `/api/transactions/:id` | |
-
-`type` is `income` or `expense`. Amounts are always positive — the type decides the sign.
-
-## Example
+Each subsystem is probed independently. Postgres being down returns 503, because nothing
+can be served correctly without it. Redis or MongoDB being down still returns 200 — they
+degrade rather than fail, which you can verify:
 
 ```bash
-# Register and capture the token
-TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"me@example.com","name":"Me","password":"supersecret"}' \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
-
-# Create an account
-ACCOUNT=$(curl -s -X POST http://localhost:3000/api/accounts \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"name":"Everyday","type":"checking","openingBalance":5000}' \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["account"]["id"])')
-
-# Record an expense
-curl -s -X POST http://localhost:3000/api/transactions \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"accountId\":\"$ACCOUNT\",\"amount\":250.50,\"type\":\"expense\",\"category\":\"groceries\"}"
-
-# See where the money went
-curl -s http://localhost:3000/api/transactions/summary -H "Authorization: Bearer $TOKEN"
+docker compose stop redis
+curl -s http://localhost:4000/health | jq '.checks.redis'   # {"status": "down", ...}
+docker compose start redis
 ```
 
-## Project layout
+## Tests
 
-```
-src/
-├── routes/       auth, accounts, transactions
-├── models/       store.js — in-memory data layer
-├── middleware/   auth, validation, error handling
-├── app.js        wires routers and middleware together
-└── server.js     entrypoint
+```bash
+docker compose up -d
+npm test
 ```
 
-## Notes and next steps
+Integration tests run against real Postgres, MongoDB and Redis rather than mocks — the
+behaviour worth testing here (transactions, idempotency, cache fallback) only exists
+against the real thing.
 
-- The store is in-memory; nothing survives a restart. A real database is the first
-  thing to add for any serious use.
-- There is no rate limiting on the auth routes yet.
-- Transactions can be created and deleted but not edited.
+## Documentation
 
-## License
+| Document | Contents |
+| --- | --- |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture, module boundaries, conventions, and ten invariants |
+| [`docs/decisions.md`](docs/decisions.md) | Decision log with rejected alternatives |
+| [`docs/progress.md`](docs/progress.md) | Workstream status and verified claims |
 
-MIT
+## Performance claims
+
+There are none yet. Numbers appear in `load/results/` only once measured, each recorded
+with its query, dataset size, hardware and method.

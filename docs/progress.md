@@ -6,21 +6,23 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — planning complete, no implementation started.
+**Last updated:** 2026-09-19 — Workstream A complete and verified.
 
 ## Current state
 
-Repository holds the planning documents only (`CLAUDE.md`, `docs/decisions.md`,
-`docs/progress.md`) plus the superseded in-memory prototype from commit `69efd80`.
-No infrastructure installed yet. Awaiting owner approval of the plan before Workstream A.
+Workstream A is done. Colima runs a 4 CPU / 4 GB VM; Postgres 16, MongoDB 8 and Redis 7
+come up healthy under `docker compose`. The API boots, validates its environment, and
+reports all three subsystems at `/health`. Eight tests pass.
 
-**Immediate next action:** install Colima (ADR-002), then start Workstream A.
+The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
+
+**Immediate next action:** Workstream C — full Prisma schema, constraints and indexes.
 
 ## Workstreams
 
 | | Workstream | Status | Depends on | Acceptance |
 |---|---|---|---|---|
-| A | Foundation | ` ` | — | `/health` reports pg + mongo + redis independently |
+| A | Foundation | `x` | — | ✅ `/health` reports pg + mongo + redis independently |
 | B | Authentication | ` ` | A, C | JWT is the only identity source across all modules |
 | C | PostgreSQL / domain | ` ` | A | Full schema + 3 composite indexes migrate onto an empty DB |
 | D | Transactions | ` ` | C, B | Forced mid-transaction failure rolls back balance *and* outbox |
@@ -63,6 +65,11 @@ not trusted.
 
 ## Log
 
+- **2026-09-19** — Workstream A complete. Colima installed and running. Compose brings up
+  Postgres/Mongo/Redis with health checks. API validates config and fails fast on a missing
+  or short `JWT_SECRET`. `/health` probes each subsystem independently: Redis down returns
+  200 with `redis: down`, Postgres down returns 503. `users` table and migration `001_users`
+  pulled forward from C so Prisma could generate a client. 8/8 tests pass.
 - **2026-09-19** — Source plan (26pp) analysed. Machine inspected: no container runtime,
   no Postgres/Mongo/Redis. Existing repo found to be an incompatible prototype.
   Thirteen decisions recorded. Fourteen workstreams defined. Awaiting approval.
