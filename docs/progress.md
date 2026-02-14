@@ -6,24 +6,28 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — Workstream A complete and verified.
+**Last updated:** 2026-09-19 — Workstreams A and B complete and verified.
 
 ## Current state
 
-Workstream A is done. Colima runs a 4 CPU / 4 GB VM; Postgres 16, MongoDB 8 and Redis 7
-come up healthy under `docker compose`. The API boots, validates its environment, and
-reports all three subsystems at `/health`. Eight tests pass.
+Workstreams A and B are done. Colima runs a 4 CPU / 4 GB VM; Postgres 16, MongoDB 8 and
+Redis 7 come up healthy under `docker compose`. The API boots, validates its environment,
+reports all three subsystems at `/health`, and serves register / login / me with JWT
+authentication. 25 tests pass.
+
+B did not need C after all: the `users` table arrived with A, so authentication was
+unblocked without the rest of the schema.
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream C — full Prisma schema, constraints and indexes.
+**Immediate next action:** Workstream C — remaining entities, constraints and indexes.
 
 ## Workstreams
 
 | | Workstream | Status | Depends on | Acceptance |
 |---|---|---|---|---|
 | A | Foundation | `x` | — | ✅ `/health` reports pg + mongo + redis independently |
-| B | Authentication | ` ` | A, C | JWT is the only identity source across all modules |
+| B | Authentication | `x` | A | ✅ JWT is the only identity source across all modules |
 | C | PostgreSQL / domain | ` ` | A | Full schema + 3 composite indexes migrate onto an empty DB |
 | D | Transactions | ` ` | C, B | Forced mid-transaction failure rolls back balance *and* outbox |
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
@@ -43,13 +47,12 @@ The prototype from `69efd80` has been removed from the tree (still in history, A
 
 ## Open questions
 
-Four defaults were taken without owner confirmation. Each is recorded as ASSUMED in the
+Three defaults remain unconfirmed (ADR-007 was confirmed 2026-09-19). Each is recorded as ASSUMED in the
 decision log and should be confirmed before the dependent workstream starts.
 
 | Decision | Assumed | Confirm before | Cost to change |
 |---|---|---|---|
 | ADR-006 cost basis | Weighted average | Workstream I | High — FIFO needs a lots table |
-| ADR-007 trades move cash | Yes, BUY debits | Workstream D | High — rewrites transaction service |
 | ADR-009 cache policy | TTL + worker invalidation | Workstream F | Low |
 | ADR-012 dataset size | ~500k transactions | Workstream M | Low — reseed |
 
@@ -65,6 +68,12 @@ not trusted.
 
 ## Log
 
+- **2026-09-19** — Workstream B complete. Register/login/me with bcrypt (12 rounds) and
+  JWT. Duplicate email resolved by unique constraint, not check-then-insert, so concurrent
+  registrations cannot both succeed. Login returns one message for both unknown-email and
+  wrong-password, with a dummy bcrypt comparison so the timing matches too. Token payload
+  carries only `sub`, `iss`, `iat`, `exp`. Unknown request fields are stripped by zod
+  rather than persisted. 25/25 tests pass.
 - **2026-09-19** — Workstream A complete. Colima installed and running. Compose brings up
   Postgres/Mongo/Redis with health checks. API validates config and fails fast on a missing
   or short `JWT_SECRET`. `/health` probes each subsystem independently: Redis down returns

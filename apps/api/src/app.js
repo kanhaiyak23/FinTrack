@@ -1,5 +1,7 @@
 import express from 'express';
 import { healthRouter } from './modules/health/routes.js';
+import { authRouter } from './modules/auth/routes.js';
+import { usersRouter } from './modules/users/routes.js';
 import { requestId, httpLogger } from './middleware/requestContext.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
@@ -15,8 +17,10 @@ export const createApp = () => {
   app.use(express.json({ limit: '100kb' }));
 
   app.use(healthRouter);
+  app.use('/auth', authRouter);
+  app.use('/users', usersRouter);
 
-  // Feature modules mount here as workstreams B-J land.
+  // Remaining feature modules mount here as workstreams C-J land.
 
   app.use(notFound);
   app.use(errorHandler);

@@ -118,7 +118,7 @@ every SELL. Switching later is a migration plus an analytics rewrite.
 ---
 
 ## ADR-007 — Trades move the cash balance
-**Status:** ASSUMED — owner has not confirmed
+**Status:** ACCEPTED — confirmed by owner 2026-09-19
 
 **Context.** The schema gives accounts a `balance` and transactions a symbol, quantity
 and price, but never states whether a BUY debits cash.
