@@ -6,7 +6,7 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — Workstreams A and B complete and verified.
+**Last updated:** 2026-09-19 — Workstreams A, B and C complete and verified.
 
 ## Current state
 
@@ -18,9 +18,13 @@ authentication. 25 tests pass.
 B did not need C after all: the `users` table arrived with A, so authentication was
 unblocked without the rest of the schema.
 
+C added the remaining seven tables with seven CHECK constraints, two partial indexes and
+the three composite indexes from the source plan. The `transactions` table exists and is
+constrained, but the transactions *module* is workstream D.
+
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream C — remaining entities, constraints and indexes.
+**Immediate next action:** Workstream D — transactions with row locking, idempotency and outbox emission.
 
 ## Workstreams
 
@@ -28,7 +32,7 @@ The prototype from `69efd80` has been removed from the tree (still in history, A
 |---|---|---|---|---|
 | A | Foundation | `x` | — | ✅ `/health` reports pg + mongo + redis independently |
 | B | Authentication | `x` | A | ✅ JWT is the only identity source across all modules |
-| C | PostgreSQL / domain | ` ` | A | Full schema + 3 composite indexes migrate onto an empty DB |
+| C | PostgreSQL / domain | `x` | A | ✅ Full schema + 3 composite indexes migrate onto an empty DB |
 | D | Transactions | ` ` | C, B | Forced mid-transaction failure rolls back balance *and* outbox |
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
 | F | Redis / cache | ` ` | A | Redis stopped → analytics still correct from Postgres |
@@ -68,6 +72,14 @@ not trusted.
 
 ## Log
 
+- **2026-09-19** — Workstream C complete. Full schema: accounts, transactions,
+  investment_plans, subscriptions, outbox_events, processed_events. Money is
+  NUMERIC(20,4) and leaves the API as a string. Seven CHECK constraints enforce business
+  rules in the database, including an equivalence that rejects both a BUY without a symbol
+  and a DEPOSIT carrying one. Partial unique index gives one active subscription per plan
+  while keeping cancellation history. Partial index on unpublished outbox rows keeps the
+  publisher's scan proportional to the backlog. Keyset pagination throughout. Idempotency
+  keys scoped per account (ADR-014, deviates from the source plan). 56/56 tests pass.
 - **2026-09-19** — Workstream B complete. Register/login/me with bcrypt (12 rounds) and
   JWT. Duplicate email resolved by unique constraint, not check-then-insert, so concurrent
   registrations cannot both succeed. Login returns one message for both unknown-email and

@@ -225,3 +225,27 @@ on `main`. The prototype remains in history at `69efd80`.
 
 **Consequences.** One repository, one URL, visible evolution. The prototype is recoverable
 from history but is not a foundation and should not be extended.
+
+---
+
+## ADR-014 — Idempotency keys are scoped to the account, not global
+**Status:** ACCEPTED
+
+**Context.** The source plan specifies `UNIQUE(idempotency_key)` on transactions when
+supplied. Taken literally that is a single global namespace: if one user posts a
+transaction with key `abc-123`, every other user's `abc-123` is permanently rejected.
+Clients choose these keys, and a predictable choice like `order-1` would collide across
+tenants immediately.
+
+**Decision.** `UNIQUE(account_id, idempotency_key)`. A retry is identified by the account
+it targets plus the client's key.
+
+**Consequences.** Retries are still exactly-once per account, which is the actual
+requirement, and one user's key choice cannot deny service to another. A client retrying
+against a different account is correctly treated as a different operation, which is what
+the semantics should be. NULL keys remain unconstrained, because Postgres treats NULLs as
+distinct in a unique index — so "unique when supplied" needs no partial index.
+
+**Rejected.** Global uniqueness as literally specified — a cross-tenant denial-of-service
+by key collision. Scoping to the user rather than the account — nearly equivalent, but the
+account is what the request already names, so no extra lookup is needed to enforce it.
