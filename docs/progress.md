@@ -6,7 +6,7 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — Workstreams A, B and C complete and verified.
+**Last updated:** 2026-09-19 — Workstreams A, B, C and D complete and verified.
 
 ## Current state
 
@@ -19,12 +19,16 @@ B did not need C after all: the `users` table arrived with A, so authentication 
 unblocked without the rest of the schema.
 
 C added the remaining seven tables with seven CHECK constraints, two partial indexes and
-the three composite indexes from the source plan. The `transactions` table exists and is
-constrained, but the transactions *module* is workstream D.
+the three composite indexes from the source plan.
+
+D implements all four transaction types inside a single database transaction with
+`SELECT ... FOR UPDATE` on the account row, client idempotency, and an outbox row written
+in the same commit. **Outbox rows currently accumulate with `published_at = NULL`: nothing
+consumes them until workstream G.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream D — transactions with row locking, idempotency and outbox emission.
+**Immediate next action:** Workstream G — BullMQ queues and the outbox publisher. Outbox rows are accumulating unpublished; nothing drains them yet.
 
 ## Workstreams
 
@@ -33,7 +37,7 @@ The prototype from `69efd80` has been removed from the tree (still in history, A
 | A | Foundation | `x` | — | ✅ `/health` reports pg + mongo + redis independently |
 | B | Authentication | `x` | A | ✅ JWT is the only identity source across all modules |
 | C | PostgreSQL / domain | `x` | A | ✅ Full schema + 3 composite indexes migrate onto an empty DB |
-| D | Transactions | ` ` | C, B | Forced mid-transaction failure rolls back balance *and* outbox |
+| D | Transactions | `x` | C, B | ✅ Forced mid-transaction failure rolls back balance *and* outbox |
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
 | F | Redis / cache | ` ` | A | Redis stopped → analytics still correct from Postgres |
 | G | BullMQ / queues | ` ` | A, F, D | Outbox rows published exactly once, survive publisher restart |
@@ -72,6 +76,14 @@ not trusted.
 
 ## Log
 
+- **2026-09-19** — Workstream D complete. DEPOSIT/WITHDRAWAL/BUY/SELL execute in one
+  `prisma.$transaction`: lock the account row, check idempotency inside the lock, validate
+  funds and holdings, insert, adjust balance, write the outbox event. Trade amounts are
+  computed server-side from quantity x price, never taken from the client. No short
+  selling. Concurrent withdrawals serialise on the row lock. Concurrent retries of one
+  idempotency key yield exactly one transaction. Atomicity proven by forcing a real
+  NUMERIC overflow mid-transaction and asserting all three writes vanish together.
+  80/80 tests pass.
 - **2026-09-19** — Workstream C complete. Full schema: accounts, transactions,
   investment_plans, subscriptions, outbox_events, processed_events. Money is
   NUMERIC(20,4) and leaves the API as a string. Seven CHECK constraints enforce business
