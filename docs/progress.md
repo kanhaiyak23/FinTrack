@@ -6,7 +6,7 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — Workstreams A, B, C and D complete and verified.
+**Last updated:** 2026-09-19 — Workstreams A, B, C, D and G complete and verified.
 
 ## Current state
 
@@ -23,12 +23,20 @@ the three composite indexes from the source plan.
 
 D implements all four transaction types inside a single database transaction with
 `SELECT ... FOR UPDATE` on the account row, client idempotency, and an outbox row written
-in the same commit. **Outbox rows currently accumulate with `published_at = NULL`: nothing
-consumes them until workstream G.**
+in the same commit.
+
+G drains the outbox. A publisher loop in the worker claims unpublished rows with
+`FOR UPDATE SKIP LOCKED`, enqueues each one onto its queue using the row id as the BullMQ
+job id, and marks `published_at` in the same transaction as the claim. Three queues
+(`analytics`, `reports`, `notifications`) exist with producers in the API and placeholder
+processors in the worker. **Those processors log and return: the real analytics and report
+logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream G — BullMQ queues and the outbox publisher. Outbox rows are accumulating unpublished; nothing drains them yet.
+**Immediate next action:** Workstream H — replace the placeholder processors with the
+real analytics and report logic. The queue topology, the idempotency helper
+(`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
 ## Workstreams
 
@@ -40,7 +48,7 @@ The prototype from `69efd80` has been removed from the tree (still in history, A
 | D | Transactions | `x` | C, B | ✅ Forced mid-transaction failure rolls back balance *and* outbox |
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
 | F | Redis / cache | ` ` | A | Redis stopped → analytics still correct from Postgres |
-| G | BullMQ / queues | ` ` | A, F, D | Outbox rows published exactly once, survive publisher restart |
+| G | BullMQ / queues | `x` | A, F, D | ✅ Outbox rows published exactly once, survive publisher restart |
 | H | Workers | ` ` | G | Same event twice → identical aggregates |
 | I | Analytics | ` ` | D, F, H | Fixture returns exact expected holdings and realized P&L |
 | J | Reports | ` ` | I | Repeatable job writes snapshot and invalidates cache |
@@ -76,6 +84,26 @@ not trusted.
 
 ## Log
 
+- **2026-09-19** — Workstream G complete. Dedicated BullMQ Redis connection per process
+  (ADR-015). Three queues with `attempts: 3`, exponential backoff from 1s, and retention
+  that keeps completed jobs long enough for jobId deduplication to mean something. The
+  outbox publisher claims batches with `SELECT ... FOR UPDATE SKIP LOCKED` ordered by
+  `occurred_at`, uses the row id as the job id, and sets `published_at` inside the claim
+  transaction, so there is no window where a row is claimed but visible to a peer. An
+  unroutable row is recorded and skipped; a transport failure abandons the pass and backs
+  off (ADR-016). Verified against a real 28-second Redis outage: the process stayed up,
+  19 of 20 backlog rows were never touched, and all 20 published exactly once on recovery.
+  `jest.config.js` now runs suites serially — the publisher claims every unpublished row
+  in the table, so a concurrently running suite writing transactions corrupts its counts.
+  90/90 tests pass.
+- **2026-09-19** — Workstream G reviewed and integrated. Review found two runtime faults
+  in the producers that the suite could not have caught, because nothing called them yet:
+  an illegal `jobId` (BullMQ rejects `:` outside a three-part id) and silent suppression
+  of `add` when a completed job with that id is still retained. Both confirmed against
+  BullMQ 5.x before changing anything; custom job ids removed (ADR-017) and regression
+  tests added. The publisher itself needed no changes: FOR UPDATE SKIP LOCKED, published_at
+  set only on a committed pass, and a real 28-second Redis outage survived without data
+  loss. 92/92 tests pass.
 - **2026-09-19** — Workstream D complete. DEPOSIT/WITHDRAWAL/BUY/SELL execute in one
   `prisma.$transaction`: lock the account row, check idempotency inside the lock, validate
   funds and holdings, insert, adjust balance, write the outbox event. Trade amounts are

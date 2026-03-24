@@ -249,3 +249,88 @@ distinct in a unique index — so "unique when supplied" needs no partial index.
 **Rejected.** Global uniqueness as literally specified — a cross-tenant denial-of-service
 by key collision. Scoping to the user rather than the account — nearly equivalent, but the
 account is what the request already names, so no extra lookup is needed to enforce it.
+
+---
+
+## ADR-015 — BullMQ gets its own Redis connection
+**Status:** ACCEPTED
+
+**Context.** `apps/api/src/db/redis.js` is tuned for a cache: `maxRetriesPerRequest: 2`
+so a cached read fails fast and falls through to Postgres, and `enableOfflineQueue: false`
+so commands do not pile up during an outage. Both are wrong for a queue. BullMQ's blocking
+commands sit open for seconds and it throws at construction time on any connection where
+`maxRetriesPerRequest` is not null; and a job enqueued during a reconnect window should be
+buffered, because dropping it costs an outbox row its only delivery.
+
+**Decision.** A second ioredis connection per process, in `queues/connection.js`, with
+`maxRetriesPerRequest: null` and `enableOfflineQueue: true`. The cache client is unchanged.
+
+**Consequences.** Two connections per process instead of one, which is cheap. The queue
+connection never rejects a command on its own during an outage, so the outbox publisher
+imposes its own 2s deadline on every enqueue rather than holding a claim transaction and
+its row locks open indefinitely.
+
+**Rejected.** One shared connection with the queue's settings — a Redis outage would then
+stall cached reads instead of falling through to Postgres, breaking invariant 8.
+
+---
+
+## ADR-016 — The outbox publisher separates an unroutable row from an unavailable queue
+**Status:** ACCEPTED
+
+**Context.** Both failures surface at the same place — the enqueue — but they need
+opposite responses. An event type with no queue mapping will fail identically forever and
+must not hold up the rest of its batch. An unreachable Redis will fail identically for
+every row in the batch, so continuing to try them wastes the claim transaction's budget
+one 2s deadline at a time.
+
+**Decision.** Routing is resolved before the enqueue is attempted. A routing failure is
+recorded against that row (`attempts + 1`, `last_error`) and the batch continues. The first
+transport failure records itself and abandons the pass; the untried rows keep
+`published_at` NULL and `attempts` 0 and are claimed again next pass. There is no maximum
+attempt count: a row that has failed a hundred times stays claimable, because excluding it
+would silently drop an event, which is what the outbox exists to prevent.
+
+**Consequences.** A 28-second Redis outage with a 20-row backlog left 19 rows untouched,
+incremented one row's attempts to 9, and published all 20 exactly once on recovery, with
+the process never restarting (measured 2026-09-19, local Colima, `docker compose stop redis`).
+A permanently unroutable row grows an attempts count and a last_error and is an operator's
+problem, not a dropped event.
+
+**Rejected.** A `MAX_ATTEMPTS` cap on the claim query — tried first, then removed: a long
+Redis outage would exhaust the cap on every row in the backlog and strand all of them.
+
+---
+
+## ADR-017 — Producers set no custom job id
+**Status:** ACCEPTED
+
+**Context.** The first implementation of the queue producers gave each job a meaningful
+id — `recompute:{accountId}`, `report:{accountId}:{type}:{start}:{end}` — to collapse
+duplicate requests. Review found two runtime faults, both invisible to the test suite
+because nothing called the producers yet.
+
+First, BullMQ rejects a custom id containing `:` unless it splits into exactly three
+parts, a compatibility carve-out for repeatable jobs. `Error: Custom Id cannot contain :`
+is thrown at enqueue time, so the first real call from workstream I would have failed.
+
+Second, and worse: `add` with the id of a **retained completed** job is silently ignored.
+It returns the finished job and queues nothing. Since `defaultJobOptions` keeps completed
+jobs for an hour, a per-account recompute id would have recomputed an account at most
+once an hour and dropped every request in between, with no error and no failed job to
+find. Verified against BullMQ 5.x: the second `add` returned state `completed` carrying
+the first call's payload, with a waiting count of zero.
+
+**Decision.** Producers set no custom job id. Every call enqueues a job.
+
+**Consequences.** No collapsing of duplicate requests, so redundant work is possible
+under bursty load. That is the correct default: redundant work is cheap and visible,
+whereas silently dropped work is neither. Correctness never depended on collapsing —
+processors are idempotent through `processed_events` (ADR-008).
+
+The outbox publisher is unaffected and still sets `jobId` to the outbox row id: those
+ids are UUIDs with no colons, each row publishes once, and the retention window is a
+belt-and-braces guard on top of the idempotency ledger rather than the mechanism itself.
+
+**Rejected.** Dedup keyed on a time bucket — workable, but inventing a window before any
+requirement exists for one. Left to workstream I, which will know the real cadence.
