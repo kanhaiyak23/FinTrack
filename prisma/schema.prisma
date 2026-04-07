@@ -75,9 +75,10 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  accounts      Account[]
-  plans         InvestmentPlan[]
-  subscriptions Subscription[]
+  accounts       Account[]
+  plans          InvestmentPlan[]
+  subscriptions  Subscription[]
+  dailyAggregates DailyUserAggregate[]
 
   @@map("users")
 }
@@ -93,8 +94,9 @@ model Account {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  holdings     PortfolioHolding[]
 
   @@index([userId])
   @@map("accounts")
@@ -200,4 +202,53 @@ model ProcessedEvent {
 
   @@id([eventId, processor])
   @@map("processed_events")
+}
+
+// Pre-aggregated state maintained by the analytics worker. These exist so an analytics
+// read is a small indexed lookup instead of a scan over every transaction ever written
+// (source plan section 10). PostgreSQL remains the source of truth: every row here is
+// derivable from `transactions`, and a rebuild is always possible.
+
+// One row per (account, symbol). Cost basis is weighted average (ADR-006): a SELL
+// realises (price - average_cost) x quantity and reduces the basis proportionally, so
+// no per-lot state is needed.
+model PortfolioHolding {
+  accountId String @map("account_id") @db.Uuid
+  symbol    String
+
+  // Net units currently held.
+  quantity Decimal @default(0) @db.Decimal(20, 8)
+  // Cost basis of the units still held - NOT lifetime spend. A SELL removes its share.
+  totalCost Decimal @default(0) @map("total_cost") @db.Decimal(20, 4)
+  // Cumulative realised profit and loss on this symbol, across all completed SELLs.
+  realizedPnl Decimal @default(0) @map("realized_pnl") @db.Decimal(20, 4)
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, symbol])
+  @@map("portfolio_holdings")
+}
+
+// One row per (user, day). Day boundaries are computed in REPORT_TIMEZONE while the
+// underlying timestamps stay UTC (ADR-011), so "today" means the same thing here as it
+// does in a daily report.
+model DailyUserAggregate {
+  userId String   @map("user_id") @db.Uuid
+  day    DateTime @db.Date
+
+  deposits         Decimal @default(0) @db.Decimal(20, 4)
+  withdrawals      Decimal @default(0) @db.Decimal(20, 4)
+  buyValue         Decimal @default(0) @map("buy_value") @db.Decimal(20, 4)
+  sellValue        Decimal @default(0) @map("sell_value") @db.Decimal(20, 4)
+  realizedPnl      Decimal @default(0) @map("realized_pnl") @db.Decimal(20, 4)
+  transactionCount Int     @default(0) @map("transaction_count")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, day])
+  @@map("daily_user_aggregates")
 }

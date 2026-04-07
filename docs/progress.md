@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream H — replace the placeholder processors with the
+**Immediate next action:** Workstream I — analytics read endpoints over the aggregates H maintains, plus the Redis cache-aside layer (F).
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -49,7 +49,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
 | F | Redis / cache | ` ` | A | Redis stopped → analytics still correct from Postgres |
 | G | BullMQ / queues | `x` | A, F, D | ✅ Outbox rows published exactly once, survive publisher restart |
-| H | Workers | ` ` | G | Same event twice → identical aggregates |
+| H | Workers | `x` | G | ✅ Same event twice → identical aggregates |
 | I | Analytics | ` ` | D, F, H | Fixture returns exact expected holdings and realized P&L |
 | J | Reports | ` ` | I | Repeatable job writes snapshot and invalidates cache |
 | K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
@@ -68,7 +68,7 @@ decision log and should be confirmed before the dependent workstream starts.
 
 | Decision | Assumed | Confirm before | Cost to change |
 |---|---|---|---|
-| ADR-006 cost basis | Weighted average | Workstream I | High — FIFO needs a lots table |
+| ADR-006 cost basis | Weighted average | ~~Workstream I~~ **already built in H** | High — migration + rewrite of services/analytics.js |
 | ADR-009 cache policy | TTL + worker invalidation | Workstream F | Low |
 | ADR-012 dataset size | ~500k transactions | Workstream M | Low — reseed |
 
@@ -96,6 +96,14 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream H complete. Real analytics processor maintains
+  `portfolio_holdings` and `daily_user_aggregates` with weighted-average cost basis.
+  Claim and aggregate update share one transaction, so a mid-apply failure leaves the
+  event unclaimed and retryable rather than marked done. Day boundaries computed in
+  REPORT_TIMEZONE in SQL. Verified end to end against running API and worker processes:
+  4 transactions -> 4 outbox rows -> 0 unpublished -> 4 processed -> holdings 15 units at
+  basis 2250 with realised P&L 500, matching hand-computed weighted average. 107/107 tests
+  pass.
 - **2026-09-19** — Workstream G reviewed and integrated. Review found two runtime faults
   in the producers that the suite could not have caught, because nothing called them yet:
   an illegal `jobId` (BullMQ rejects `:` outside a three-part id) and silent suppression

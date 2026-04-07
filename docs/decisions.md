@@ -101,7 +101,8 @@ between commit and enqueue.
 ---
 
 ## ADR-006 — Weighted-average cost basis for P&L
-**Status:** ASSUMED — owner has not confirmed
+**Status:** ASSUMED — implemented 2026-09-19 in workstream H without confirmation.
+Reversing it now costs a migration plus a rewrite of `services/analytics.js`.
 
 **Context.** Realized P&L needs exactly one documented cost-basis method.
 

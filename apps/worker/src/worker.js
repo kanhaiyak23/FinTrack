@@ -4,6 +4,8 @@ import { logger } from './logger.js';
 import { queueConnection, closeQueueConnection } from './queues/connection.js';
 import { QUEUE_NAMES, closeQueues } from './queues/index.js';
 import { startOutboxPublisher } from './processors/outbox.js';
+import { analyticsProcessor } from './processors/analytics.js';
+import { notificationProcessor } from './processors/notification.js';
 import { disconnectPostgres } from './db/prisma.js';
 
 logger.info(
@@ -11,10 +13,10 @@ logger.info(
   'fintrack worker starting',
 );
 
-// Workstream H replaces these with the real analytics, report and notification
-// processors. They exist now so the queue topology, the concurrency setting and the
-// drain-on-shutdown path are exercised rather than assumed. A processor that logs and
-// returns still acknowledges the job, which is what proves the publisher's end works.
+// Reports are still a placeholder: workstream J owns the snapshot logic. Analytics and
+// notifications are real. A processor that throws is left to throw - BullMQ retries it
+// and then parks it in the failed set, which is the only record of what could not be
+// done. Swallowing the error here would make a stuck aggregate invisible.
 const placeholder = (queueName) => async (job) => {
   logger.info(
     { queue: queueName, jobId: job.id, name: job.name, attempt: job.attemptsMade + 1 },
@@ -22,12 +24,18 @@ const placeholder = (queueName) => async (job) => {
   );
 };
 
+const processorFor = {
+  [QUEUE_NAMES.ANALYTICS]: analyticsProcessor,
+  [QUEUE_NAMES.NOTIFICATIONS]: notificationProcessor,
+  [QUEUE_NAMES.REPORTS]: placeholder(QUEUE_NAMES.REPORTS),
+};
+
 const publisher = startOutboxPublisher();
 
 // One ioredis instance is shared: BullMQ duplicates it internally for each Worker's
 // blocking connection, so the workers do not contend on a single blocked socket.
 const workers = Object.values(QUEUE_NAMES).map((name) => {
-  const worker = new Worker(name, placeholder(name), {
+  const worker = new Worker(name, processorFor[name], {
     connection: queueConnection,
     concurrency: config.WORKER_CONCURRENCY,
   });
