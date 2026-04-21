@@ -2,6 +2,7 @@ import { logger } from '../logger.js';
 import { prisma } from '../db/prisma.js';
 import { processOnce } from '../services/idempotency.js';
 import { applyEvent } from '../services/analytics.js';
+import { invalidateUserAnalytics } from '../db/redis.js';
 
 const PROCESSOR = 'analytics';
 
@@ -24,6 +25,11 @@ export const analyticsProcessor = async (job) => {
     logger.debug({ eventId: event.eventId, jobId: job.id }, 'analytics event already applied');
     return { applied: false };
   }
+
+  // Invalidated AFTER the commit, never inside it. Deleting inside the transaction
+  // would open a window where a reader repopulates the cache from pre-commit state and
+  // then nothing clears it again - staleness that outlives the TTL reset.
+  await invalidateUserAnalytics(event.userId);
 
   logger.info(
     { eventId: event.eventId, eventType: event.eventType, userId: event.userId },

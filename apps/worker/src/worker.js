@@ -7,6 +7,7 @@ import { startOutboxPublisher } from './processors/outbox.js';
 import { analyticsProcessor } from './processors/analytics.js';
 import { notificationProcessor } from './processors/notification.js';
 import { disconnectPostgres } from './db/prisma.js';
+import { disconnectCacheRedis } from './db/redis.js';
 
 logger.info(
   { instance: config.INSTANCE_ID, concurrency: config.WORKER_CONCURRENCY },
@@ -88,7 +89,7 @@ const shutdown = async (signal) => {
     await publisher.stop();
     await Promise.allSettled(workers.map((worker) => worker.close()));
     await closeQueues();
-    await Promise.allSettled([disconnectPostgres(), closeQueueConnection()]);
+    await Promise.allSettled([disconnectPostgres(), closeQueueConnection(), disconnectCacheRedis()]);
   } catch (err) {
     logger.error({ err: err.message }, 'error during shutdown');
   }

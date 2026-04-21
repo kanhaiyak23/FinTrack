@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { prisma, disconnectPostgres } from '../../apps/worker/src/db/prisma.js';
 import { closeQueueConnection } from '../../apps/worker/src/queues/connection.js';
+// The analytics processor invalidates the cache, which opens a second Redis connection.
+// Leaving it open keeps the jest process alive after the suite finishes.
+import { disconnectCacheRedis } from '../../apps/worker/src/db/redis.js';
 import { closeQueues } from '../../apps/worker/src/queues/index.js';
 import { analyticsProcessor } from '../../apps/worker/src/processors/analytics.js';
 import { applyEvent } from '../../apps/worker/src/services/analytics.js';
@@ -60,7 +63,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await closeQueues();
-  await Promise.allSettled([disconnectPostgres(), closeQueueConnection()]);
+  await Promise.allSettled([disconnectPostgres(), closeQueueConnection(), disconnectCacheRedis()]);
 });
 
 describe('idempotency', () => {

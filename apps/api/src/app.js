@@ -6,6 +6,7 @@ import { accountsRouter } from './modules/accounts/routes.js';
 import { plansRouter } from './modules/plans/routes.js';
 import { subscriptionsRouter } from './modules/subscriptions/routes.js';
 import { transactionsRouter } from './modules/transactions/routes.js';
+import { analyticsRouter } from './modules/analytics/routes.js';
 import { requestId, httpLogger } from './middleware/requestContext.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
@@ -27,8 +28,9 @@ export const createApp = () => {
   app.use('/plans', plansRouter);
   app.use('/subscriptions', subscriptionsRouter);
   app.use('/transactions', transactionsRouter);
+  app.use('/analytics', analyticsRouter);
 
-  // Remaining feature modules mount here as workstreams E-J land.
+  // Remaining feature modules mount here as workstreams E and J land.
 
   app.use(notFound);
   app.use(errorHandler);

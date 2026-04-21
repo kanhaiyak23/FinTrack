@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream I — analytics read endpoints over the aggregates H maintains, plus the Redis cache-aside layer (F).
+**Immediate next action:** Workstream E — activity events into MongoDB and `GET /activity`. Then J (reports), L (Docker/Nginx), M (load testing), N (docs).
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -47,10 +47,10 @@ real analytics and report logic. The queue topology, the idempotency helper
 | C | PostgreSQL / domain | `x` | A | ✅ Full schema + 3 composite indexes migrate onto an empty DB |
 | D | Transactions | `x` | C, B | ✅ Forced mid-transaction failure rolls back balance *and* outbox |
 | E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
-| F | Redis / cache | ` ` | A | Redis stopped → analytics still correct from Postgres |
+| F | Redis / cache | `x` | A | ✅ Redis stopped → analytics still correct from Postgres |
 | G | BullMQ / queues | `x` | A, F, D | ✅ Outbox rows published exactly once, survive publisher restart |
 | H | Workers | `x` | G | ✅ Same event twice → identical aggregates |
-| I | Analytics | ` ` | D, F, H | Fixture returns exact expected holdings and realized P&L |
+| I | Analytics | `x` | D, F, H | ✅ Fixture returns exact expected holdings and realized P&L |
 | J | Reports | ` ` | I | Repeatable job writes snapshot and invalidates cache |
 | K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
 | L | Docker / Nginx | ` ` | A, H | `--scale api=3 --scale worker=2` serves through Nginx |
@@ -69,7 +69,7 @@ decision log and should be confirmed before the dependent workstream starts.
 | Decision | Assumed | Confirm before | Cost to change |
 |---|---|---|---|
 | ADR-006 cost basis | Weighted average | ~~Workstream I~~ **already built in H** | High — migration + rewrite of services/analytics.js |
-| ADR-009 cache policy | TTL + worker invalidation | Workstream F | Low |
+| ADR-009 cache policy | TTL + worker invalidation | ~~Workstream F~~ **built as assumed** | Low |
 | ADR-012 dataset size | ~500k transactions | Workstream M | Low — reseed |
 
 ## Verified claims
@@ -96,6 +96,13 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstreams F and I complete. Cache-aside helper that never throws;
+  every Redis call wrapped so an outage costs latency only. Worker invalidates the three
+  per-user analytics keys after the aggregate commit, never inside it. Analytics endpoints
+  read the pre-aggregated tables rather than the transaction log. Market value and
+  unrealised P&L are returned as null with a stated reason - there is no price feed and
+  inventing one would be worse than omitting it. Verified against a genuinely stopped
+  Redis container: 200, x-cache MISS, byte-identical payload. 120/120 tests pass.
 - **2026-09-19** — Workstream H complete. Real analytics processor maintains
   `portfolio_holdings` and `daily_user_aggregates` with weighted-average cost basis.
   Claim and aggregate update share one transaction, so a mid-apply failure leaves the
