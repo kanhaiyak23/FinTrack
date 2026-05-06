@@ -19,6 +19,10 @@ export const connectMongo = async () => {
 
 export const mongoDb = () => client.db(config.MONGODB_DB);
 
+// Written by the worker, read here. The API never writes to this collection: activity
+// is derived from the outbox, and a second writer would be a second source of truth.
+export const activityEvents = () => mongoDb().collection('activity_events');
+
 export const checkMongo = async () => {
   await client.db(config.MONGODB_DB).command({ ping: 1 });
   return true;

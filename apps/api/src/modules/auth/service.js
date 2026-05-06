@@ -3,6 +3,8 @@ import { Prisma } from '@prisma/client';
 import { config } from '../../config/index.js';
 import { ApiError } from '../../middleware/errors.js';
 import { signAccessToken } from '../../lib/jwt.js';
+import { prisma } from '../../db/prisma.js';
+import { recordEvent, EVENT_TYPES } from '../../lib/outbox.js';
 import { usersRepository } from '../users/repository.js';
 import { toPublicUser } from '../users/service.js';
 
@@ -17,7 +19,19 @@ export const authService = {
 
     let user;
     try {
-      user = await usersRepository.create({ email, name, passwordHash });
+      // The user row and its activity event commit together, same as every other write
+      // (invariant 6). A registration that is not in the history did not happen.
+      user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({ data: { email, name, passwordHash } });
+        await recordEvent(tx, {
+          eventType: EVENT_TYPES.USER_REGISTERED,
+          entityType: 'user',
+          entityId: created.id,
+          userId: created.id,
+          payload: { email: created.email, name: created.name },
+        });
+        return created;
+      });
     } catch (err) {
       // Rely on the unique constraint rather than a check-then-insert, which races
       // two concurrent registrations of the same address.
@@ -36,6 +50,19 @@ export const authService = {
 
     // One message for both failures: distinguishing them enumerates accounts.
     if (!user || !matches) throw ApiError.unauthorized('Invalid email or password');
+
+    // A login writes nothing else, so this is the whole transaction. It is still routed
+    // through the outbox rather than enqueued directly, because a second mechanism for
+    // emitting events is a second mechanism that can be wrong.
+    await prisma.$transaction((tx) =>
+      recordEvent(tx, {
+        eventType: EVENT_TYPES.LOGIN,
+        entityType: 'user',
+        entityId: user.id,
+        userId: user.id,
+        payload: { email: user.email },
+      }),
+    );
 
     return { user: toPublicUser(user), token: signAccessToken(user.id) };
   },

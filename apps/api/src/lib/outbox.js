@@ -9,8 +9,18 @@ export const recordEvent = (tx, { eventType, entityType, entityId, userId, paylo
     data: { eventType, entityType, entityId, userId, payload },
   });
 
+// The taxonomy from the project plan. Money events additionally drive analytics; the
+// rest exist purely as user activity history. Adding a type here without adding it to
+// EVENT_ROUTES in the worker makes the publisher park the row with an error rather than
+// drop it, which is the intended failure mode.
 export const EVENT_TYPES = {
+  USER_REGISTERED: 'USER_REGISTERED',
+  LOGIN: 'LOGIN',
   DEPOSIT_COMPLETED: 'DEPOSIT_COMPLETED',
   WITHDRAWAL_COMPLETED: 'WITHDRAWAL_COMPLETED',
   TRADE_EXECUTED: 'TRADE_EXECUTED',
+  PLAN_CREATED: 'PLAN_CREATED',
+  PLAN_UPDATED: 'PLAN_UPDATED',
+  SUBSCRIPTION_CREATED: 'SUBSCRIPTION_CREATED',
+  SUBSCRIPTION_CANCELLED: 'SUBSCRIPTION_CANCELLED',
 };

@@ -335,3 +335,28 @@ belt-and-braces guard on top of the idempotency ledger rather than the mechanism
 
 **Rejected.** Dedup keyed on a time bucket — workable, but inventing a window before any
 requirement exists for one. Left to workstream I, which will know the real cadence.
+
+---
+
+## ADR-018 — Activity idempotency uses a unique index, not the processed_events ledger
+**Status:** ACCEPTED
+
+**Context.** Every other processor guards against redelivery with `processed_events`
+(ADR-008), claiming the event in the same Postgres transaction as its effect. The
+activity processor writes to MongoDB, so its effect and that claim are in different
+databases and cannot share a transaction.
+
+**Decision.** The activity history is made idempotent by a unique index on `eventId` in
+`activity_events`. A duplicate key error is the authoritative "already recorded".
+
+**Consequences.** No two-phase commit and no window where an event is marked processed
+but not recorded — which is what claiming in Postgres and then failing to write to Mongo
+would produce. The guard lives in the same database as the thing it protects, so it
+cannot disagree with it. The cost is a second idempotency mechanism in the codebase,
+justified by the storage boundary rather than by preference.
+
+**Rejected.** Claiming in `processed_events` first — a crash between the claim and the
+Mongo write would lose the event from the history permanently, with the ledger insisting
+it had been handled. Writing activity into Postgres to reuse the ledger — would put
+heterogeneous per-event metadata into a relational table, which is the thing MongoDB is
+here to avoid.

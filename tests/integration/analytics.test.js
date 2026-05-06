@@ -6,6 +6,8 @@ import { prisma, disconnectPostgres } from '../../apps/api/src/db/prisma.js';
 import { connectMongo, disconnectMongo } from '../../apps/api/src/db/mongo.js';
 import { redis, disconnectRedis } from '../../apps/api/src/db/redis.js';
 import { analyticsProcessor } from '../../apps/worker/src/processors/analytics.js';
+// From routes.js, not index.js: reading the routing table must not construct queues.
+import { EVENT_ROUTES, QUEUE_NAMES } from '../../apps/worker/src/queues/routes.js';
 import { disconnectPostgres as disconnectWorkerPostgres } from '../../apps/worker/src/db/prisma.js';
 import { disconnectCacheRedis } from '../../apps/worker/src/db/redis.js';
 import { resetDatabase } from '../helpers/db.js';
@@ -18,9 +20,20 @@ const post = (auth, body) => auth(request(app).post('/transactions')).send(body)
 // Drives the worker directly rather than waiting on the publisher, so a test asserts on
 // a settled state instead of racing a poll interval. The publisher's own behaviour is
 // covered in queues.test.js.
+//
+// Respects EVENT_ROUTES rather than feeding everything to the analytics processor: since
+// workstream E the outbox also carries activity-only events like USER_REGISTERED, and
+// the analytics processor rejects those by design.
+const routesToAnalytics = (eventType) =>
+  (EVENT_ROUTES[eventType] ?? []).includes(QUEUE_NAMES.ANALYTICS);
+
 const drainOutbox = async () => {
   const rows = await prisma.outboxEvent.findMany({ where: { publishedAt: null }, orderBy: { occurredAt: 'asc' } });
   for (const row of rows) {
+    if (!routesToAnalytics(row.eventType)) {
+      await prisma.outboxEvent.update({ where: { id: row.id }, data: { publishedAt: new Date() } });
+      continue;
+    }
     await analyticsProcessor({
       id: row.id,
       name: row.eventType,

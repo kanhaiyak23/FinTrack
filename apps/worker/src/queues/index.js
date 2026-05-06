@@ -1,17 +1,16 @@
 import { Queue } from 'bullmq';
 import { queueConnection } from './connection.js';
+import { QUEUE_NAMES, EVENT_ROUTES } from './routes.js';
+
+// Re-exported so callers that need queues keep one import; callers that need only the
+// routing table import ./routes.js directly and open no connections.
+export { QUEUE_NAMES, EVENT_ROUTES };
 
 // The worker's view of the same three queues. Mirrored from apps/api/src/queues/index.js
 // rather than imported for the reason given in connection.js: the two processes ship
 // independently and the worker must not depend on the API's module tree. The names are
 // the wire contract between them, so they are literals in both places and a mismatch
 // fails loudly (see the unmapped-event path in processors/outbox.js) rather than quietly.
-
-export const QUEUE_NAMES = Object.freeze({
-  ANALYTICS: 'analytics',
-  REPORTS: 'reports',
-  NOTIFICATIONS: 'notifications',
-});
 
 export const defaultJobOptions = Object.freeze({
   attempts: 3,
@@ -26,19 +25,11 @@ const build = (name) => new Queue(name, { connection: queueConnection, defaultJo
 
 export const queues = Object.freeze({
   [QUEUE_NAMES.ANALYTICS]: build(QUEUE_NAMES.ANALYTICS),
+  [QUEUE_NAMES.ACTIVITY]: build(QUEUE_NAMES.ACTIVITY),
   [QUEUE_NAMES.REPORTS]: build(QUEUE_NAMES.REPORTS),
   [QUEUE_NAMES.NOTIFICATIONS]: build(QUEUE_NAMES.NOTIFICATIONS),
 });
 
-// Where each outbox event type is delivered. Event type names are owned by
-// apps/api/src/lib/outbox.js; an event type missing from this map is a deployment
-// mistake, and the publisher treats it as a failure so the row waits for the fix
-// instead of being dropped.
-export const EVENT_ROUTES = Object.freeze({
-  DEPOSIT_COMPLETED: QUEUE_NAMES.ANALYTICS,
-  WITHDRAWAL_COMPLETED: QUEUE_NAMES.ANALYTICS,
-  TRADE_EXECUTED: QUEUE_NAMES.ANALYTICS,
-});
 
 export const closeQueues = async () => {
   await Promise.allSettled(Object.values(queues).map((queue) => queue.close()));

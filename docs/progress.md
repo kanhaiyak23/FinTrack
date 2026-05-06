@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream E — activity events into MongoDB and `GET /activity`. Then J (reports), L (Docker/Nginx), M (load testing), N (docs).
+**Immediate next action:** Workstream J — daily and monthly report snapshots. Then L (Docker/Nginx), M (load testing), N (docs/Postman).
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -46,7 +46,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | B | Authentication | `x` | A | ✅ JWT is the only identity source across all modules |
 | C | PostgreSQL / domain | `x` | A | ✅ Full schema + 3 composite indexes migrate onto an empty DB |
 | D | Transactions | `x` | C, B | ✅ Forced mid-transaction failure rolls back balance *and* outbox |
-| E | Activity events | ` ` | D, G | Every business write emits exactly one event, no duplicates |
+| E | Activity events | `x` | D, G | ✅ Every business write emits exactly one event, no duplicates |
 | F | Redis / cache | `x` | A | ✅ Redis stopped → analytics still correct from Postgres |
 | G | BullMQ / queues | `x` | A, F, D | ✅ Outbox rows published exactly once, survive publisher restart |
 | H | Workers | `x` | G | ✅ Same event twice → identical aggregates |
@@ -96,6 +96,13 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream E complete. Nine event types now emitted, every one inside
+  the transaction of the write it describes. The outbox fans out: money events reach both
+  the analytics and activity queues, lifecycle events only activity. Activity history is
+  in MongoDB, idempotent through a unique index on eventId rather than processed_events,
+  because the Mongo write and a Postgres ledger entry cannot share a transaction.
+  `GET /activity` paginates by keyset on (occurredAt, eventId). Verified live: 6 events,
+  0 unpublished, 6 activity documents, 2 analytics updates. 137/137 tests pass.
 - **2026-09-19** — Workstreams F and I complete. Cache-aside helper that never throws;
   every Redis call wrapped so an outage costs latency only. Worker invalidates the three
   per-user analytics keys after the aggregate commit, never inside it. Analytics endpoints

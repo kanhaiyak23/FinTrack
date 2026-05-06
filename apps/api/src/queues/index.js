@@ -12,6 +12,7 @@ import { queueConnection } from './connection.js';
 
 export const QUEUE_NAMES = Object.freeze({
   ANALYTICS: 'analytics',
+  ACTIVITY: 'activity',
   REPORTS: 'reports',
   NOTIFICATIONS: 'notifications',
 });
@@ -35,6 +36,7 @@ const build = (name) => new Queue(name, { connection: queueConnection, defaultJo
 
 export const queues = Object.freeze({
   [QUEUE_NAMES.ANALYTICS]: build(QUEUE_NAMES.ANALYTICS),
+  [QUEUE_NAMES.ACTIVITY]: build(QUEUE_NAMES.ACTIVITY),
   [QUEUE_NAMES.REPORTS]: build(QUEUE_NAMES.REPORTS),
   [QUEUE_NAMES.NOTIFICATIONS]: build(QUEUE_NAMES.NOTIFICATIONS),
 });

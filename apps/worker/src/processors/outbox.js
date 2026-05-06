@@ -60,27 +60,43 @@ const jobDataFor = (row) => ({
   occurredAt: row.occurred_at.toISOString(),
 });
 
-// Resolved before the enqueue is attempted, so "this row can never be delivered" and
-// "Redis is unreachable" stay distinguishable - they need opposite responses.
+// Resolved before any enqueue is attempted, so "this row can never be delivered" and
+// "Redis is unreachable" stay distinguishable - they need opposite responses. An event
+// may fan out to several queues; all of them must resolve or the row is unroutable.
 const routeFor = (eventType) => {
-  const queueName = EVENT_ROUTES[eventType];
-  if (!queueName) return { error: `no queue mapped for event type ${eventType}` };
+  const queueNames = EVENT_ROUTES[eventType];
+  if (!queueNames || queueNames.length === 0) {
+    return { error: `no queue mapped for event type ${eventType}` };
+  }
 
-  const queue = queues[queueName];
-  if (!queue) return { error: `event type ${eventType} routes to unknown queue ${queueName}` };
+  const targets = [];
+  for (const queueName of queueNames) {
+    const queue = queues[queueName];
+    if (!queue) return { error: `event type ${eventType} routes to unknown queue ${queueName}` };
+    targets.push({ queueName, queue });
+  }
 
-  return { queueName, queue };
+  return { targets };
 };
 
-// The outbox row id IS the job id. If this process dies between the enqueue and the
-// commit, the row is still unpublished and gets re-enqueued - onto the job that already
-// exists, not a second one.
-const enqueue = (queue, queueName, row) =>
-  withDeadline(
-    queue.add(row.event_type, jobDataFor(row), { jobId: row.id }),
-    ENQUEUE_TIMEOUT_MS,
-    `enqueue to ${queueName} timed out after ${ENQUEUE_TIMEOUT_MS}ms`,
-  );
+// The outbox row id IS the job id, and BullMQ scopes ids per queue, so one row becomes
+// at most one job in each of its destinations. If this process dies between an enqueue
+// and the commit, the row is still unpublished and gets re-enqueued - onto the jobs that
+// already exist, not duplicates.
+//
+// Fan-out is sequential and all-or-nothing for the ROW: a row counts as published only
+// once every destination has accepted it. A partial fan-out leaves published_at NULL, so
+// the next pass re-enqueues to all of them and the queues that already have the job
+// deduplicate it away.
+const enqueue = async (targets, row) => {
+  for (const { queue, queueName } of targets) {
+    await withDeadline(
+      queue.add(row.event_type, jobDataFor(row), { jobId: row.id }),
+      ENQUEUE_TIMEOUT_MS,
+      `enqueue to ${queueName} timed out after ${ENQUEUE_TIMEOUT_MS}ms`,
+    );
+  }
+};
 
 // One pass. Exported separately from the loop so a caller - the tests, or an operator
 // draining a backlog - can run exactly one and see what it did.
@@ -96,7 +112,7 @@ export const publishBatch = async ({ batchSize = BATCH_SIZE } = {}) =>
       // Sequential, not Promise.all: ordering within a batch is the point, and a
       // hundred concurrent enqueues against one connection buys nothing.
       for (const row of rows) {
-        const { queue, queueName, error } = routeFor(row.event_type);
+        const { targets, error } = routeFor(row.event_type);
         if (error) {
           // The row is at fault, not the transport. Record it and keep going, so one
           // unroutable event cannot hold up everything behind it in the batch.
@@ -105,7 +121,7 @@ export const publishBatch = async ({ batchSize = BATCH_SIZE } = {}) =>
         }
 
         try {
-          await enqueue(queue, queueName, row);
+          await enqueue(targets, row);
           published.push(row.id);
         } catch (err) {
           // An enqueue that fails is almost always Redis, not this row - and every

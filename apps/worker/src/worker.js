@@ -6,8 +6,10 @@ import { QUEUE_NAMES, closeQueues } from './queues/index.js';
 import { startOutboxPublisher } from './processors/outbox.js';
 import { analyticsProcessor } from './processors/analytics.js';
 import { notificationProcessor } from './processors/notification.js';
+import { activityProcessor } from './processors/activity.js';
 import { disconnectPostgres } from './db/prisma.js';
 import { disconnectCacheRedis } from './db/redis.js';
+import { connectMongo, ensureIndexes, disconnectMongo } from './db/mongo.js';
 
 logger.info(
   { instance: config.INSTANCE_ID, concurrency: config.WORKER_CONCURRENCY },
@@ -27,9 +29,16 @@ const placeholder = (queueName) => async (job) => {
 
 const processorFor = {
   [QUEUE_NAMES.ANALYTICS]: analyticsProcessor,
+  [QUEUE_NAMES.ACTIVITY]: activityProcessor,
   [QUEUE_NAMES.NOTIFICATIONS]: notificationProcessor,
   [QUEUE_NAMES.REPORTS]: placeholder(QUEUE_NAMES.REPORTS),
 };
+
+// Mongo connects before any worker starts consuming: a job that arrives before the
+// connection is up would fail and burn a retry for no reason. Indexes are ensured here
+// too, including the unique one the activity processor depends on for idempotency.
+await connectMongo();
+await ensureIndexes();
 
 const publisher = startOutboxPublisher();
 
@@ -89,7 +98,12 @@ const shutdown = async (signal) => {
     await publisher.stop();
     await Promise.allSettled(workers.map((worker) => worker.close()));
     await closeQueues();
-    await Promise.allSettled([disconnectPostgres(), closeQueueConnection(), disconnectCacheRedis()]);
+    await Promise.allSettled([
+      disconnectPostgres(),
+      closeQueueConnection(),
+      disconnectCacheRedis(),
+      disconnectMongo(),
+    ]);
   } catch (err) {
     logger.error({ err: err.message }, 'error during shutdown');
   }
