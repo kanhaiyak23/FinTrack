@@ -1,5 +1,16 @@
 import { Queue } from 'bullmq';
-import { queueConnection } from './connection.js';
+import { getQueueConnection } from './connection.js';
+
+// Mirrored from apps/worker/src/queues/jobs.js rather than imported across the workspace
+// boundary, for the same reason the queue names are: the two processes ship
+// independently, and apps/api reaching into apps/worker would make that untrue. These
+// strings are the wire contract, so they are literals on both sides.
+export const JOB_NAMES = Object.freeze({
+  RECOMPUTE_ANALYTICS: 'recompute-analytics',
+  GENERATE_REPORT: 'generate-report',
+  SCHEDULE_REPORTS: 'schedule-reports',
+  SEND_NOTIFICATION: 'send-notification',
+});
 
 // Producers only. `Worker` is never imported in apps/api: an API instance that
 // processed a job would stop being interchangeable with its siblings behind Nginx
@@ -32,20 +43,18 @@ export const defaultJobOptions = Object.freeze({
   removeOnFail: { age: 86_400, count: 5000 },
 });
 
-const build = (name) => new Queue(name, { connection: queueConnection, defaultJobOptions });
+// Queues are built on demand for the same reason the connection is: importing this
+// module must not open a socket. `queueFor` is the only way to reach one.
+const instances = new Map();
 
-export const queues = Object.freeze({
-  [QUEUE_NAMES.ANALYTICS]: build(QUEUE_NAMES.ANALYTICS),
-  [QUEUE_NAMES.ACTIVITY]: build(QUEUE_NAMES.ACTIVITY),
-  [QUEUE_NAMES.REPORTS]: build(QUEUE_NAMES.REPORTS),
-  [QUEUE_NAMES.NOTIFICATIONS]: build(QUEUE_NAMES.NOTIFICATIONS),
-});
-
-export const JOB_NAMES = Object.freeze({
-  RECOMPUTE_ANALYTICS: 'recompute-analytics',
-  GENERATE_REPORT: 'generate-report',
-  SEND_NOTIFICATION: 'send-notification',
-});
+const queueFor = (name) => {
+  let queue = instances.get(name);
+  if (!queue) {
+    queue = new Queue(name, { connection: getQueueConnection(), defaultJobOptions });
+    instances.set(name, queue);
+  }
+  return queue;
+};
 
 // Named producers rather than raw `queue.add` at the call site: the payload shape is
 // declared once here, so a processor in apps/worker has exactly one contract to read.
@@ -72,10 +81,10 @@ export const JOB_NAMES = Object.freeze({
 export const producers = {
   // userId always comes from req.user.userId, never from the request (invariant 2).
   recomputeAnalytics: ({ userId, accountId, reason }) =>
-    queues[QUEUE_NAMES.ANALYTICS].add(JOB_NAMES.RECOMPUTE_ANALYTICS, { userId, accountId, reason }),
+    queueFor(QUEUE_NAMES.ANALYTICS).add(JOB_NAMES.RECOMPUTE_ANALYTICS, { userId, accountId, reason }),
 
   generateReport: ({ userId, accountId, reportType, periodStart, periodEnd }) =>
-    queues[QUEUE_NAMES.REPORTS].add(JOB_NAMES.GENERATE_REPORT, {
+    queueFor(QUEUE_NAMES.REPORTS).add(JOB_NAMES.GENERATE_REPORT, {
       userId,
       accountId,
       reportType,
@@ -84,7 +93,7 @@ export const producers = {
     }),
 
   sendNotification: ({ userId, channel, template, data }) =>
-    queues[QUEUE_NAMES.NOTIFICATIONS].add(JOB_NAMES.SEND_NOTIFICATION, {
+    queueFor(QUEUE_NAMES.NOTIFICATIONS).add(JOB_NAMES.SEND_NOTIFICATION, {
       userId,
       channel,
       template,
@@ -93,5 +102,7 @@ export const producers = {
 };
 
 export const closeQueues = async () => {
-  await Promise.allSettled(Object.values(queues).map((queue) => queue.close()));
+  const open = [...instances.values()];
+  instances.clear();
+  await Promise.allSettled(open.map((queue) => queue.close()));
 };

@@ -13,7 +13,11 @@ export const cacheKeys = {
   portfolio: (userId) => `analytics:user:${userId}:portfolio`,
   activity: (userId) => `analytics:user:${userId}:activity`,
   pnl: (userId) => `analytics:user:${userId}:pnl`,
-  dailyReport: (userId, date) => `report:user:${userId}:daily:${date}`,
+  // The worker builds this exact string when it invalidates a regenerated report, so
+  // the format is a contract between the two processes. It lives here and is mirrored
+  // in apps/worker/src/processors/report.js.
+  report: (userId, reportType, periodStart) =>
+    `report:user:${userId}:${reportType.toLowerCase()}:${periodStart}`,
 };
 
 // Every analytics key for one user. Used on invalidation, where being coarse is right:

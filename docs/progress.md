@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream J — daily and monthly report snapshots. Then L (Docker/Nginx), M (load testing), N (docs/Postman).
+**Immediate next action:** Workstream L — Dockerfiles, Nginx, multi-instance compose.
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -51,7 +51,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | G | BullMQ / queues | `x` | A, F, D | ✅ Outbox rows published exactly once, survive publisher restart |
 | H | Workers | `x` | G | ✅ Same event twice → identical aggregates |
 | I | Analytics | `x` | D, F, H | ✅ Fixture returns exact expected holdings and realized P&L |
-| J | Reports | ` ` | I | Repeatable job writes snapshot and invalidates cache |
+| J | Reports | `x` | I | ✅ Repeatable job writes snapshot and invalidates cache |
 | K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
 | L | Docker / Nginx | ` ` | A, H | `--scale api=3 --scale worker=2` serves through Nginx |
 | M | Load testing | ` ` | L | Every number carries query, dataset size, hardware, method |
@@ -96,6 +96,16 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream J complete. Daily and monthly snapshots in MongoDB, built
+  by a worker from the aggregates and upserted so regeneration replaces rather than
+  accumulates. BullMQ repeatable jobs at 00:15 and 00:30 in REPORT_TIMEZONE; the schedule
+  lives in Redis so N workers converge on one timetable instead of N. A read with no
+  snapshot returns 202 and enqueues generation rather than 404. Fixed a cache-key mismatch
+  between API and worker found by a test, and made the API's queue connection lazy after
+  discovering that importing the Express app opened a Redis socket. 151/151 tests pass.
+
+  **Known flake:** `domain.test.js › subscribes to an owned plan` failed once in a full
+  run and passed in isolation and on re-run. Not diagnosed. Recorded rather than ignored.
 - **2026-09-19** — Workstream E complete. Nine event types now emitted, every one inside
   the transaction of the write it describes. The outbox fans out: money events reach both
   the analytics and activity queues, lifecycle events only activity. Activity history is

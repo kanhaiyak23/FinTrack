@@ -8,6 +8,7 @@ import { subscriptionsRouter } from './modules/subscriptions/routes.js';
 import { transactionsRouter } from './modules/transactions/routes.js';
 import { analyticsRouter } from './modules/analytics/routes.js';
 import { activityRouter } from './modules/activity/routes.js';
+import { reportsRouter } from './modules/reports/routes.js';
 import { requestId, httpLogger } from './middleware/requestContext.js';
 import { notFound, errorHandler } from './middleware/errors.js';
 
@@ -31,8 +32,8 @@ export const createApp = () => {
   app.use('/transactions', transactionsRouter);
   app.use('/analytics', analyticsRouter);
   app.use('/activity', activityRouter);
+  app.use('/reports', reportsRouter);
 
-  // Reports mount here when workstream J lands.
 
   app.use(notFound);
   app.use(errorHandler);

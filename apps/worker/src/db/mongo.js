@@ -21,6 +21,7 @@ export const connectMongo = async () => {
 export const mongoDb = () => client.db(config.MONGODB_DB);
 
 export const activityEvents = () => mongoDb().collection('activity_events');
+export const reportSnapshots = () => mongoDb().collection('report_snapshots');
 
 // Created by the writer rather than by a migration: MongoDB has no migration step in
 // this project, and an index that only exists on a developer's machine is worse than
@@ -36,6 +37,14 @@ export const ensureIndexes = async () => {
     // merely prevented, and it is what the writer relies on to stay idempotent.
     { key: { eventId: 1 }, name: 'event_id_unique', unique: true },
   ]);
+
+  await reportSnapshots().createIndexes([
+    // A report for a user, a type and a period is one document. Regenerating replaces
+    // it rather than accumulating versions, so this index is also the upsert key.
+    { key: { userId: 1, reportType: 1, periodStart: 1 }, name: 'user_type_period', unique: true },
+    { key: { userId: 1, generatedAt: -1 }, name: 'user_generated' },
+  ]);
+
   logger.info('mongodb indexes ensured');
 };
 

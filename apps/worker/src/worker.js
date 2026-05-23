@@ -7,6 +7,8 @@ import { startOutboxPublisher } from './processors/outbox.js';
 import { analyticsProcessor } from './processors/analytics.js';
 import { notificationProcessor } from './processors/notification.js';
 import { activityProcessor } from './processors/activity.js';
+import { reportProcessor } from './processors/report.js';
+import { scheduleReportJobs } from './schedule.js';
 import { disconnectPostgres } from './db/prisma.js';
 import { disconnectCacheRedis } from './db/redis.js';
 import { connectMongo, ensureIndexes, disconnectMongo } from './db/mongo.js';
@@ -16,22 +18,14 @@ logger.info(
   'fintrack worker starting',
 );
 
-// Reports are still a placeholder: workstream J owns the snapshot logic. Analytics and
-// notifications are real. A processor that throws is left to throw - BullMQ retries it
-// and then parks it in the failed set, which is the only record of what could not be
-// done. Swallowing the error here would make a stuck aggregate invisible.
-const placeholder = (queueName) => async (job) => {
-  logger.info(
-    { queue: queueName, jobId: job.id, name: job.name, attempt: job.attemptsMade + 1 },
-    'job received - placeholder processor, no aggregate updated',
-  );
-};
-
+// A processor that throws is left to throw - BullMQ retries it and then parks it in the
+// failed set, which is the only record of what could not be done. Swallowing the error
+// here would make a stuck aggregate invisible.
 const processorFor = {
   [QUEUE_NAMES.ANALYTICS]: analyticsProcessor,
   [QUEUE_NAMES.ACTIVITY]: activityProcessor,
   [QUEUE_NAMES.NOTIFICATIONS]: notificationProcessor,
-  [QUEUE_NAMES.REPORTS]: placeholder(QUEUE_NAMES.REPORTS),
+  [QUEUE_NAMES.REPORTS]: reportProcessor,
 };
 
 // Mongo connects before any worker starts consuming: a job that arrives before the
@@ -39,6 +33,10 @@ const processorFor = {
 // too, including the unique one the activity processor depends on for idempotency.
 await connectMongo();
 await ensureIndexes();
+
+// Repeatable jobs are registered on every boot. BullMQ keys them by name and pattern,
+// so N worker instances booting at once converge on one schedule rather than N.
+await scheduleReportJobs();
 
 const publisher = startOutboxPublisher();
 
