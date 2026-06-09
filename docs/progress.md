@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream L — Dockerfiles, Nginx, multi-instance compose.
+**Immediate next action:** Workstream M — seed data, EXPLAIN ANALYZE, k6 load tests.
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -53,7 +53,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | I | Analytics | `x` | D, F, H | ✅ Fixture returns exact expected holdings and realized P&L |
 | J | Reports | `x` | I | ✅ Repeatable job writes snapshot and invalidates cache |
 | K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
-| L | Docker / Nginx | ` ` | A, H | `--scale api=3 --scale worker=2` serves through Nginx |
+| L | Docker / Nginx | `x` | A, H | ✅ `--scale api=3 --scale worker=2` serves through Nginx |
 | M | Load testing | ` ` | L | Every number carries query, dataset size, hardware, method |
 | N | Documentation | ` ` | continuous | Failure-mode table documented and true of the built system |
 
@@ -96,6 +96,13 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream L complete. Multi-stage Dockerfiles for API and worker,
+  running unprivileged. Nginx with least_conn in front. Application services sit behind a
+  compose profile so `docker compose up -d` still gives just infrastructure for local
+  development. Verified with api=3 and worker=2: 60 requests distributed 20/20/20 across
+  instances, a JWT issued by one instance accepted by all three, and 12 outbox rows
+  processed exactly once by two concurrent publishers - holding landed at exactly 10 units
+  after 10 concurrent BUYs.
 - **2026-09-19** — Workstream J complete. Daily and monthly snapshots in MongoDB, built
   by a worker from the aggregates and upserted so regeneration replaces rather than
   accumulates. BullMQ repeatable jobs at 00:15 and 00:30 in REPORT_TIMEZONE; the schedule

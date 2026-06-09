@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import dotenv from 'dotenv';
@@ -20,7 +21,9 @@ const schema = z.object({
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   REPORT_TIMEZONE: z.string().default('Asia/Kolkata'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  INSTANCE_ID: z.string().default('worker-local'),
+  // Defaults to the hostname, which Docker sets to the container id - so scaled
+  // replicas identify themselves without compose having to invent a value per replica.
+  INSTANCE_ID: z.string().default(`worker-${os.hostname()}`),
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
 });
 

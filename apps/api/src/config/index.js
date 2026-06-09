@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import dotenv from 'dotenv';
@@ -33,7 +34,9 @@ const schema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Identifies which instance served a request once several sit behind Nginx.
-  INSTANCE_ID: z.string().default('api-local'),
+  // Defaults to the hostname, which Docker sets to the container id - so scaled
+  // replicas identify themselves without compose having to invent a value per replica.
+  INSTANCE_ID: z.string().default(`api-${os.hostname()}`),
 });
 
 const parsed = schema.safeParse(process.env);
