@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream M — seed data, EXPLAIN ANALYZE, k6 load tests.
+**Immediate next action:** Workstream N — README, architecture doc, Postman collection.
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -54,7 +54,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | J | Reports | `x` | I | ✅ Repeatable job writes snapshot and invalidates cache |
 | K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
 | L | Docker / Nginx | `x` | A, H | ✅ `--scale api=3 --scale worker=2` serves through Nginx |
-| M | Load testing | ` ` | L | Every number carries query, dataset size, hardware, method |
+| M | Load testing | `x` | L | ✅ Every number carries query, dataset size, hardware, method |
 | N | Documentation | ` ` | continuous | Failure-mode table documented and true of the built system |
 
 ## Critical path
@@ -70,7 +70,7 @@ decision log and should be confirmed before the dependent workstream starts.
 |---|---|---|---|
 | ADR-006 cost basis | Weighted average | ~~Workstream I~~ **already built in H** | High — migration + rewrite of services/analytics.js |
 | ADR-009 cache policy | TTL + worker invalidation | ~~Workstream F~~ **built as assumed** | Low |
-| ADR-012 dataset size | ~500k transactions | Workstream M | Low — reseed |
+| ADR-012 dataset size | ~500k transactions | ~~Workstream M~~ **used as assumed** | Low — reseed |
 
 ## Verified claims
 
@@ -96,6 +96,12 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream M complete. Seeded 500,018 transactions in 29.5s. Index
+  benchmark shows 0.153 ms vs 38.078 ms with and without the composite index, measured by
+  dropping it inside a rolled-back transaction. k6 read-heavy: 5,107 req/s, p95 6.46 ms,
+  100% cache hits, 0 failures. Write-heavy with all VUs contending on one account row:
+  361 req/s, p95 94.22 ms, 0 failures, and the resulting 16,437 outbox rows drained to
+  zero backlog. Caveats recorded alongside every figure.
 - **2026-09-19** — Workstream L complete. Multi-stage Dockerfiles for API and worker,
   running unprivileged. Nginx with least_conn in front. Application services sit behind a
   compose profile so `docker compose up -d` still gives just infrastructure for local

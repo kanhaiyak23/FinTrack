@@ -19,7 +19,8 @@
     "generate": "prisma generate",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "infra:up": "docker compose up -d postgres mongodb redis",
-    "infra:down": "docker compose down"
+    "infra:down": "docker compose down",
+    "seed": "node scripts/seed.js"
   },
   "devDependencies": {
     "jest": "^29.7.0",
