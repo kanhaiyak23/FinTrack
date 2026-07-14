@@ -34,7 +34,7 @@ logic is workstream H.**
 
 The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
 
-**Immediate next action:** Workstream N — README, architecture doc, Postman collection.
+**Immediate next action:** none — the build is complete. Remaining known gaps are listed under Open questions and in the README's limitations section.
 real analytics and report logic. The queue topology, the idempotency helper
 (`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
 
@@ -52,10 +52,10 @@ real analytics and report logic. The queue topology, the idempotency helper
 | H | Workers | `x` | G | ✅ Same event twice → identical aggregates |
 | I | Analytics | `x` | D, F, H | ✅ Fixture returns exact expected holdings and realized P&L |
 | J | Reports | `x` | I | ✅ Repeatable job writes snapshot and invalidates cache |
-| K | Testing | ` ` | continuous | `npm test` green from clean checkout + `docker compose up -d` |
+| K | Testing | `x` | continuous | ✅ `npm test` green from clean checkout + `docker compose up -d` |
 | L | Docker / Nginx | `x` | A, H | ✅ `--scale api=3 --scale worker=2` serves through Nginx |
 | M | Load testing | `x` | L | ✅ Every number carries query, dataset size, hardware, method |
-| N | Documentation | ` ` | continuous | Failure-mode table documented and true of the built system |
+| N | Documentation | `x` | continuous | ✅ Failure-mode table documented and true of the built system |
 
 ## Critical path
 
@@ -96,6 +96,12 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Workstream N complete, and with it all fourteen. Architecture document
+  with the failure-mode table, README with measured figures and their caveats, and a
+  26-request Postman collection that chains its own auth token and ids. Documented that
+  the app containers must be stopped before running tests: they share Postgres and Redis,
+  so a running worker consumes jobs the tests count - which is exactly how it presented,
+  as five queue tests failing for no visible reason.
 - **2026-09-19** — Workstream M complete. Seeded 500,018 transactions in 29.5s. Index
   benchmark shows 0.153 ms vs 38.078 ms with and without the composite index, measured by
   dropping it inside a rolled-back transaction. k6 read-heavy: 5,107 req/s, p95 6.46 ms,

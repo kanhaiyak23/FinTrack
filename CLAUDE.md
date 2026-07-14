@@ -106,7 +106,9 @@ docker compose up -d                  # postgres, mongo, redis
 npm run migrate -w apps/api           # prisma migrate deploy
 npm run dev -w apps/api               # API on :4000
 npm run dev -w apps/worker            # worker process
-npm test                              # jest + supertest, needs infra up
+npm test                              # jest + supertest, needs infra up.
+                                      # Stop the app profile first: a running worker
+                                      # consumes jobs the tests count.
 npm run seed -- --transactions 500000 # benchmark dataset
 docker compose up --scale api=3 --scale worker=2   # full stack behind nginx :8080
 ```
