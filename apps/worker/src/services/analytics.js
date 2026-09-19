@@ -22,67 +22,96 @@ const lockHolding = async (tx, accountId, symbol) => {
     VALUES (${accountId}::uuid, ${symbol}, now())
     ON CONFLICT (account_id, symbol) DO NOTHING`;
 
-  const [row] = await tx.$queryRaw`
-    SELECT quantity, total_cost, realized_pnl
-    FROM portfolio_holdings
+  await tx.$queryRaw`
+    SELECT 1 FROM portfolio_holdings
     WHERE account_id = ${accountId}::uuid AND symbol = ${symbol}
     FOR UPDATE`;
-
-  return {
-    quantity: new Prisma.Decimal(row.quantity),
-    totalCost: new Prisma.Decimal(row.total_cost),
-    realizedPnl: new Prisma.Decimal(row.realized_pnl),
-  };
 };
 
-// Returns the realised P&L of this event, which the daily aggregate also needs.
-const applyTrade = async (tx, { accountId, symbol, type, quantity, price }) => {
-  const held = await lockHolding(tx, accountId, symbol);
-  const qty = new Prisma.Decimal(quantity);
-  const unitPrice = new Prisma.Decimal(price);
+// Weighted average is ORDER DEPENDENT: the realised P&L of a sale depends on the
+// average at the moment it happened. Applying trades incrementally is therefore only
+// correct if events arrive in order - and they do not. The worker runs jobs
+// concurrently, so three trades on one account are claimed together and then race for
+// the holding row lock. The lock serialises the writes; it does not order them. A SELL
+// that wins the race against an earlier BUY produces a plausible, wrong average.
+//
+// So the holding is not mutated incrementally. It is RECOMPUTED by replaying that
+// symbol's completed trades from the transaction log, which is the source of truth. The
+// result is identical whatever order the events are processed in, and a late or
+// redelivered event heals the aggregate instead of corrupting it.
+//
+// The cost is a query over one account's trades in one symbol, served by
+// idx_transactions_account_symbol - not a scan of the transaction table.
+const replaySymbol = async (tx, { accountId, symbol, forTransactionId }) => {
+  const rows = await tx.$queryRaw`
+    SELECT id, type, quantity, price
+    FROM transactions
+    WHERE account_id = ${accountId}::uuid
+      AND symbol = ${symbol}
+      AND type IN ('BUY', 'SELL')
+      AND status = 'COMPLETED'
+    -- created_at and id break ties so the replay is deterministic when two trades
+    -- share a transaction_time.
+    ORDER BY transaction_time ASC, created_at ASC, id ASC`;
 
-  let next;
-  let realized = ZERO;
+  let quantity = ZERO;
+  let totalCost = ZERO;
+  let realizedPnl = ZERO;
+  // What THIS event contributed, which is what the daily bucket needs. Computed during
+  // the same replay so it cannot disagree with the holding.
+  let realizedForEvent = ZERO;
 
-  if (type === 'BUY') {
-    next = {
-      quantity: held.quantity.plus(qty),
-      totalCost: held.totalCost.plus(qty.mul(unitPrice)),
-      realizedPnl: held.realizedPnl,
-    };
-  } else {
-    // The API rejects overselling before the transaction is written, so a SELL beyond
-    // the holding means the aggregate has drifted from `transactions`. Clamping would
-    // hide that; better to let the job fail and be visible in the failed set.
-    if (qty.greaterThan(held.quantity)) {
+  for (const row of rows) {
+    const qty = new Prisma.Decimal(row.quantity);
+    const price = new Prisma.Decimal(row.price);
+
+    if (row.type === 'BUY') {
+      quantity = quantity.plus(qty);
+      totalCost = totalCost.plus(qty.mul(price));
+      continue;
+    }
+
+    // The API refuses a SELL beyond the holding before it is ever written, so hitting
+    // this means the transaction log itself is inconsistent - rows deleted, or a bug
+    // upstream. Clamping would produce plausible numbers that are silently wrong, so the
+    // job fails and lands in the failed set where it is visible.
+    if (qty.greaterThan(quantity)) {
       throw new Error(
-        `aggregate drift: SELL ${qty} of ${symbol} exceeds holding ${held.quantity} on account ${accountId}`,
+        `aggregate drift: SELL ${qty} of ${symbol} exceeds holding ${quantity} on account ${accountId}`,
       );
     }
 
-    const average = held.quantity.isZero() ? ZERO : held.totalCost.div(held.quantity);
-    realized = unitPrice.minus(average).mul(qty);
+    const average = quantity.isZero() ? ZERO : totalCost.div(quantity);
+    const realized = price.minus(average).mul(qty);
+    realizedPnl = realizedPnl.plus(realized);
+    if (row.id === forTransactionId) realizedForEvent = realized;
 
-    const remaining = held.quantity.minus(qty);
-    next = {
-      quantity: remaining,
-      // Exactly zero once the position is closed, rather than a rounding residue that
-      // would make the next average subtly wrong.
-      totalCost: remaining.isZero() ? ZERO : held.totalCost.minus(average.mul(qty)),
-      realizedPnl: held.realizedPnl.plus(realized),
-    };
+    quantity = quantity.minus(qty);
+    // Exactly zero once the position closes, rather than a rounding residue that would
+    // make the next average subtly wrong.
+    totalCost = quantity.isZero() ? ZERO : totalCost.minus(average.mul(qty));
   }
+
+  return { quantity, totalCost, realizedPnl, realizedForEvent };
+};
+
+const applyTrade = async (tx, { accountId, symbol, transactionId }) => {
+  // The lock still matters: it stops two concurrent replays of the same symbol from
+  // both writing, even though they would compute the same answer.
+  await lockHolding(tx, accountId, symbol);
+
+  const state = await replaySymbol(tx, { accountId, symbol, forTransactionId: transactionId });
 
   await tx.portfolioHolding.update({
     where: { accountId_symbol: { accountId, symbol } },
     data: {
-      quantity: next.quantity,
-      totalCost: next.totalCost.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
-      realizedPnl: next.realizedPnl.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
+      quantity: state.quantity,
+      totalCost: state.totalCost.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
+      realizedPnl: state.realizedPnl.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
     },
   });
 
-  return realized.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
+  return state.realizedForEvent.toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
 };
 
 // Pure increments, so this is a single atomic upsert with no lock and no read. The day
@@ -130,9 +159,7 @@ export const applyEvent = async (tx, event) => {
     const realized = await applyTrade(tx, {
       accountId: payload.accountId,
       symbol: payload.symbol,
-      type: payload.type,
-      quantity: payload.quantity,
-      price: payload.price,
+      transactionId: payload.transactionId,
     });
 
     if (payload.type === 'BUY') deltas.buyValue = amount.toFixed(4);

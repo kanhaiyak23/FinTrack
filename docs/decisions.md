@@ -360,3 +360,43 @@ Mongo write would lose the event from the history permanently, with the ledger i
 it had been handled. Writing activity into Postgres to reuse the ledger — would put
 heterogeneous per-event metadata into a relational table, which is the thing MongoDB is
 here to avoid.
+
+---
+
+## ADR-019 — Holdings are recomputed from the transaction log, not mutated incrementally
+**Status:** ACCEPTED
+
+**Context.** The analytics processor originally applied each trade incrementally: a BUY
+added to quantity and cost, a SELL computed `(price - average) x quantity` against the
+stored average and reduced the basis proportionally. That is correct only if events
+arrive in the order they happened.
+
+They do not. The worker runs with `WORKER_CONCURRENCY` above one, so several trades for
+the same account are claimed within milliseconds of each other and then race for the
+holding row lock. The lock serialises the writes but does not order them.
+
+Found live while walking the system by hand: buying 10 @ 100, then 10 @ 200, then selling
+5 @ 250 reported a cost basis of 2,500 with realised P&L of 750. The correct figures are
+2,250 and 500. What it produced is exactly the result of applying the sale before the
+second purchase. Nothing errored, and the numbers were plausible. An earlier end-to-end
+run of the same three trades had happened to process them in order and looked correct,
+which is how the bug survived the test suite.
+
+**Decision.** A trade event no longer mutates the holding. It recomputes it by replaying
+that symbol's completed trades from `transactions`, the source of truth, and takes the
+realised P&L attributable to its own transaction from the same replay.
+
+**Consequences.** The result is identical whatever order events are processed in, so
+concurrency needs no ceiling. A late or redelivered event heals the aggregate rather than
+corrupting it, which makes the system self-repairing after an outage. The cost is a query
+over one account's trades in one symbol per event, served by
+`idx_transactions_account_symbol` - not a scan of the table.
+
+Daily aggregates needed no change: they are pure sums, and addition does not care about
+order.
+
+**Rejected.** Setting analytics concurrency to 1 - restores ordering within one worker
+process but not across two, so it would have been slower *and* still wrong under
+`--scale worker=2`. Per-account sequence numbers with a watermark - correct, but it makes
+every event depend on its predecessor having been processed, turning one poison message
+into a stalled account.
