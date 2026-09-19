@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FinTrack — Setup &amp; Verification Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 14mm 14mm; }
+  :root{
+    --ink:#16202b; --muted:#5b6b7c; --line:#d9e1ea; --bg:#ffffff;
+    --accent:#1f6feb; --ok:#127c4a; --warn:#9a5b00; --bad:#b42318;
+    --code-bg:#f5f8fb; --panel:#f0f5fa;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink); background:var(--bg); margin:0;
+    font-size:10.2pt; line-height:1.5;
+  }
+  h1,h2,h3,h4{line-height:1.25; margin:0 0 .4em}
+  h2{font-size:17pt; border-bottom:2px solid var(--accent); padding-bottom:5px; margin-top:0}
+  h3{font-size:12.5pt; margin-top:1.3em; color:#0f2b46}
+  h4{font-size:10.6pt; margin-top:1.1em; color:#24384d}
+  p{margin:.5em 0}
+  a{color:var(--accent); text-decoration:none}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8.9pt;
+       background:var(--code-bg); padding:1px 4px; border-radius:3px; border:1px solid var(--line)}
+  pre{font-family:"SF Mono",Menlo,Consolas,monospace; font-size:8.3pt; line-height:1.45;
+      background:var(--code-bg); border:1px solid var(--line); border-left:3px solid var(--accent);
+      border-radius:4px; padding:9px 11px; overflow:hidden; white-space:pre-wrap; word-break:break-word; margin:.5em 0}
+  pre code{background:none;border:none;padding:0;font-size:inherit}
+  pre.out{border-left-color:var(--ok); background:#f3faf6}
+  pre.bad{border-left-color:var(--bad); background:#fdf4f3}
+  table{border-collapse:collapse; width:100%; margin:.6em 0; font-size:9.2pt}
+  th,td{border:1px solid var(--line); padding:5px 7px; text-align:left; vertical-align:top}
+  th{background:var(--panel); font-weight:600}
+  .section{page-break-before:always}
+  .nobreak{page-break-inside:avoid}
+  .tag{display:inline-block; font-size:7.8pt; font-weight:700; letter-spacing:.4px;
+       padding:2px 6px; border-radius:3px; text-transform:uppercase}
+  .t-ok{background:#e4f5ec;color:var(--ok);border:1px solid #b6e0c8}
+  .t-warn{background:#fdf3e2;color:var(--warn);border:1px solid #f0d9ac}
+  .t-bad{background:#fdecea;color:var(--bad);border:1px solid #f5c2bd}
+  .t-info{background:#e7f0fd;color:var(--accent);border:1px solid #bcd4f7}
+  .callout{border:1px solid var(--line); border-left:4px solid var(--accent);
+           background:var(--panel); padding:9px 12px; border-radius:4px; margin:.7em 0}
+  .callout.warn{border-left-color:var(--warn); background:#fdf8ef}
+  .callout.bad{border-left-color:var(--bad); background:#fdf4f3}
+  .callout.ok{border-left-color:var(--ok); background:#f3faf6}
+  .callout p{margin:.25em 0}
+  .toplink{float:right; font-size:8pt; color:var(--muted)}
+  .muted{color:var(--muted)}
+  .small{font-size:8.6pt}
+  figure{margin:.8em 0; page-break-inside:avoid}
+  figcaption{font-size:8.4pt; color:var(--muted); margin-top:4px; text-align:center}
+  .cover{height:250mm; display:flex; flex-direction:column; justify-content:center; text-align:center}
+  .cover h1{font-size:34pt; letter-spacing:-.5px; margin-bottom:.1em}
+  .cover .sub{font-size:13pt; color:var(--muted); margin-bottom:1.6em}
+  .pill{display:inline-block; margin:3px; padding:4px 10px; border:1px solid var(--line);
+        border-radius:12px; font-size:8.6pt; background:var(--panel)}
+  .toc a{display:block; padding:5px 0; border-bottom:1px dotted var(--line); color:var(--ink)}
+  .toc .n{display:inline-block; width:26px; color:var(--accent); font-weight:700}
+  .kbd{border:1px solid #c6d2de;border-bottom-width:2px;border-radius:3px;padding:0 4px;
+       font-size:8.4pt;background:#fff;font-family:Menlo,monospace}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div style="font-size:9pt;letter-spacing:3px;color:var(--muted);text-transform:uppercase">Backend Engineering Project</div>
+  <h1>FinTrack</h1>
+  <div class="sub">Setup &amp; Verification Guide<br><span class="small">from <code>git clone</code> to proving every guarantee</span></div>
+  <div>
+    <span class="pill">Node.js</span><span class="pill">Express</span><span class="pill">PostgreSQL</span>
+    <span class="pill">MongoDB</span><span class="pill">Redis</span><span class="pill">BullMQ</span>
+    <span class="pill">Prisma</span><span class="pill">Docker</span><span class="pill">Nginx</span><span class="pill">k6</span>
+  </div>
+  <div style="margin-top:2.4em" class="small muted">
+    Every command in this document was executed against the codebase.<br>
+    Outputs shown are real, not illustrative.
+  </div>
+  <div style="margin-top:2.4em" class="small">
+    <a href="https://github.com/kanhaiyak23/FinTrack">github.com/kanhaiyak23/FinTrack</a>
+    &nbsp;·&nbsp; 153 tests passing &nbsp;·&nbsp; 19 recorded decisions
+  </div>
+</div>
+
+<div class="section">
+<h2 id="toc">Contents</h2>
+<p class="small muted">Every entry is clickable. Each section has a “back to contents” link in its corner.</p>
+<div class="toc">
+  <a href="#q"><span class="n">1</span> Do I still need Docker for local development?</a>
+  <a href="#arch"><span class="n">2</span> What the system is, in one picture</a>
+  <a href="#clone"><span class="n">3</span> From clone to running — the exact process</a>
+  <a href="#modes"><span class="n">4</span> The two ways to run it</a>
+  <a href="#features"><span class="n">5</span> Feature walkthrough with real output</a>
+  <a href="#guarantees"><span class="n">6</span> The six guarantees, and how to prove each</a>
+  <a href="#data"><span class="n">7</span> Looking inside the three databases</a>
+  <a href="#tests"><span class="n">8</span> Tests, benchmarks and load results</a>
+  <a href="#scale"><span class="n">9</span> Scaling it and proving it scaled</a>
+  <a href="#trouble"><span class="n">10</span> Troubleshooting</a>
+  <a href="#demo"><span class="n">11</span> The 90-second demo</a>
+</div>
+
+<h3>How to read this</h3>
+<table>
+<tr><th style="width:22%">Marker</th><th>Meaning</th></tr>
+<tr><td><span class="tag t-info">command</span></td><td>Type this. Blue left border.</td></tr>
+<tr><td><span class="tag t-ok">output</span></td><td>What you should see. Green left border.</td></tr>
+<tr><td><span class="tag t-bad">wrong</span></td><td>A failure mode, and what it means.</td></tr>
+<tr><td><span class="tag t-warn">watch out</span></td><td>Something that will bite you if skipped.</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2 id="q">1. Do I still need Docker for local development? <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<p><b>Yes — but only for the three databases, never for your own code.</b> This is the single
+most useful thing to understand about running this project.</p>
+
+<p>FinTrack needs PostgreSQL, MongoDB and Redis. You have two honest options: install all
+three natively on your Mac and manage three services, or run one command and let Docker
+provide them. The project assumes the second. <b>Your API and worker still run as ordinary
+Node processes</b> with <code>npm run dev</code> — you edit a file, it restarts, you set
+breakpoints, exactly as normal.</p>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 300" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="12">
+  <rect x="8" y="8" width="340" height="284" rx="8" fill="#f3faf6" stroke="#b6e0c8"/>
+  <text x="178" y="32" text-anchor="middle" font-size="13" font-weight="700" fill="#127c4a">YOUR MACHINE — plain Node</text>
+  <text x="178" y="50" text-anchor="middle" font-size="10" fill="#5b6b7c">npm run dev · edit · restart · debug</text>
+  <rect x="42" y="72" width="128" height="58" rx="6" fill="#fff" stroke="#127c4a"/>
+  <text x="106" y="96" text-anchor="middle" font-weight="700">API</text>
+  <text x="106" y="114" text-anchor="middle" font-size="10" fill="#5b6b7c">:4000</text>
+  <rect x="188" y="72" width="128" height="58" rx="6" fill="#fff" stroke="#127c4a"/>
+  <text x="252" y="96" text-anchor="middle" font-weight="700">Worker</text>
+  <text x="252" y="114" text-anchor="middle" font-size="10" fill="#5b6b7c">no port</text>
+  <text x="178" y="160" text-anchor="middle" font-size="10.5" fill="#16202b">npm run dev:api</text>
+  <text x="178" y="178" text-anchor="middle" font-size="10.5" fill="#16202b">npm run dev:worker</text>
+  <text x="178" y="212" text-anchor="middle" font-size="10" fill="#5b6b7c">Your code. Never containerised</text>
+  <text x="178" y="228" text-anchor="middle" font-size="10" fill="#5b6b7c">while you are developing.</text>
+
+  <rect x="372" y="8" width="340" height="284" rx="8" fill="#e7f0fd" stroke="#bcd4f7"/>
+  <text x="542" y="32" text-anchor="middle" font-size="13" font-weight="700" fill="#1f6feb">DOCKER — the three databases</text>
+  <text x="542" y="50" text-anchor="middle" font-size="10" fill="#5b6b7c">docker compose up -d</text>
+  <rect x="396" y="72" width="94" height="58" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="443" y="94" text-anchor="middle" font-size="11" font-weight="700">Postgres</text>
+  <text x="443" y="112" text-anchor="middle" font-size="9.5" fill="#5b6b7c">:5432</text>
+  <rect x="500" y="72" width="94" height="58" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="547" y="94" text-anchor="middle" font-size="11" font-weight="700">MongoDB</text>
+  <text x="547" y="112" text-anchor="middle" font-size="9.5" fill="#5b6b7c">:27017</text>
+  <rect x="604" y="72" width="86" height="58" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="647" y="94" text-anchor="middle" font-size="11" font-weight="700">Redis</text>
+  <text x="647" y="112" text-anchor="middle" font-size="9.5" fill="#5b6b7c">:6379</text>
+  <text x="542" y="164" text-anchor="middle" font-size="10" fill="#5b6b7c">Ports are published to localhost,</text>
+  <text x="542" y="180" text-anchor="middle" font-size="10" fill="#5b6b7c">so your Node processes reach them</text>
+  <text x="542" y="196" text-anchor="middle" font-size="10" fill="#5b6b7c">as if they were installed natively.</text>
+  <text x="542" y="228" text-anchor="middle" font-size="10" fill="#5b6b7c">Data survives restarts in volumes.</text>
+
+  <path d="M170 101 L188 101" stroke="#127c4a" stroke-width="2"/>
+  <path d="M316 101 L396 101" stroke="#1f6feb" stroke-width="2" stroke-dasharray="5 3"/>
+  <polygon points="396,101 388,97 388,105" fill="#1f6feb"/>
+  <text x="356" y="93" text-anchor="middle" font-size="9" fill="#5b6b7c">localhost</text>
+</svg>
+<figcaption>Local development: your code runs on the host, only the databases are containerised.</figcaption>
+</figure>
+
+<h3>So what does Docker actually give you here?</h3>
+<table>
+<tr><th style="width:34%">Without Docker</th><th>With Docker</th></tr>
+<tr><td>Install Postgres 16, MongoDB 8 and Redis 7 by hand; keep three brew services running</td><td>One command, correct versions, isolated from anything else on your Mac</td></tr>
+<tr><td>Version drift between your machine and anyone else's</td><td>Everyone gets the same versions, pinned in <code>docker-compose.yml</code></td></tr>
+<tr><td>Cleaning up means uninstalling services</td><td><code>docker compose down -v</code> and it is gone</td></tr>
+<tr><td>Nowhere to demonstrate Nginx or multiple API instances</td><td><code>--profile app --scale api=3</code> and it is real</td></tr>
+</table>
+
+<div class="callout">
+<p><b>The short version.</b> <code>docker compose up -d</code> once per session to get your
+databases. Then <code>npm run dev:api</code> and <code>npm run dev:worker</code> like any
+other Node project. You only containerise your <i>own</i> code when you want to demo the
+full scaled stack behind Nginx — see <a href="#modes">section 4</a>.</p>
+</div>
+
+<div class="callout warn">
+<p><b>Both processes are required.</b> The API alone will accept writes and return
+<code>201</code>, but analytics, activity history and reports stay empty, because a worker
+is what updates them. If your portfolio looks empty, this is almost always why.</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="arch">2. What the system is, in one picture <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 420" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="11">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#5b6b7c"/></marker></defs>
+
+  <rect x="300" y="8" width="120" height="34" rx="6" fill="#fff" stroke="#5b6b7c"/>
+  <text x="360" y="30" text-anchor="middle">Client</text>
+  <path d="M360 42 L360 62" stroke="#5b6b7c" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="284" y="64" width="152" height="34" rx="6" fill="#e7f0fd" stroke="#1f6feb"/>
+  <text x="360" y="86" text-anchor="middle" font-weight="700">Nginx :8080</text>
+  <text x="446" y="86" font-size="9" fill="#5b6b7c">least_conn</text>
+
+  <path d="M360 98 L200 124" stroke="#5b6b7c" stroke-width="1.3" marker-end="url(#a)"/>
+  <path d="M360 98 L360 124" stroke="#5b6b7c" stroke-width="1.3" marker-end="url(#a)"/>
+  <path d="M360 98 L520 124" stroke="#5b6b7c" stroke-width="1.3" marker-end="url(#a)"/>
+  <rect x="140" y="126" width="120" height="38" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="200" y="150" text-anchor="middle">API 1</text>
+  <rect x="300" y="126" width="120" height="38" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="360" y="150" text-anchor="middle">API 2</text>
+  <rect x="460" y="126" width="120" height="38" rx="6" fill="#fff" stroke="#1f6feb"/>
+  <text x="520" y="150" text-anchor="middle">API 3</text>
+  <text x="360" y="180" text-anchor="middle" font-size="9" fill="#5b6b7c">stateless — any instance serves any request</text>
+
+  <rect x="60" y="212" width="150" height="62" rx="6" fill="#f3faf6" stroke="#127c4a"/>
+  <text x="135" y="234" text-anchor="middle" font-weight="700">PostgreSQL</text>
+  <text x="135" y="251" text-anchor="middle" font-size="9" fill="#5b6b7c">source of truth</text>
+  <text x="135" y="265" text-anchor="middle" font-size="9" fill="#5b6b7c">money · outbox · aggregates</text>
+
+  <rect x="285" y="212" width="150" height="62" rx="6" fill="#fdf8ef" stroke="#9a5b00"/>
+  <text x="360" y="234" text-anchor="middle" font-weight="700">Redis</text>
+  <text x="360" y="251" text-anchor="middle" font-size="9" fill="#5b6b7c">cache + BullMQ</text>
+  <text x="360" y="265" text-anchor="middle" font-size="9" fill="#5b6b7c">optimisation, not truth</text>
+
+  <rect x="510" y="212" width="150" height="62" rx="6" fill="#f6f0fb" stroke="#6b3fa0"/>
+  <text x="585" y="234" text-anchor="middle" font-weight="700">MongoDB</text>
+  <text x="585" y="251" text-anchor="middle" font-size="9" fill="#5b6b7c">activity events</text>
+  <text x="585" y="265" text-anchor="middle" font-size="9" fill="#5b6b7c">report snapshots</text>
+
+  <path d="M200 164 L135 212" stroke="#5b6b7c" stroke-width="1.2" marker-end="url(#a)"/>
+  <path d="M360 164 L360 212" stroke="#5b6b7c" stroke-width="1.2" marker-end="url(#a)"/>
+  <path d="M520 164 L585 212" stroke="#5b6b7c" stroke-width="1.2" marker-end="url(#a)"/>
+
+  <rect x="230" y="320" width="260" height="76" rx="6" fill="#e7f0fd" stroke="#1f6feb"/>
+  <text x="360" y="342" text-anchor="middle" font-weight="700">Worker × N</text>
+  <text x="360" y="360" text-anchor="middle" font-size="9" fill="#5b6b7c">outbox publisher · analytics</text>
+  <text x="360" y="374" text-anchor="middle" font-size="9" fill="#5b6b7c">activity · reports · notifications</text>
+  <text x="360" y="390" text-anchor="middle" font-size="9" fill="#5b6b7c">scales independently of the API</text>
+
+  <path d="M135 274 L230 344" stroke="#127c4a" stroke-width="1.4" marker-end="url(#a)"/>
+  <text x="150" y="318" font-size="9" fill="#127c4a">outbox rows</text>
+  <path d="M360 274 L360 320" stroke="#9a5b00" stroke-width="1.4" marker-end="url(#a)"/>
+  <text x="368" y="300" font-size="9" fill="#9a5b00">jobs</text>
+  <path d="M490 344 L585 274" stroke="#6b3fa0" stroke-width="1.4" marker-end="url(#a)"/>
+  <text x="530" y="318" font-size="9" fill="#6b3fa0">events</text>
+</svg>
+<figcaption>Two process types, not six services. The API answers requests; the worker does everything expensive.</figcaption>
+</figure>
+
+<table>
+<tr><th style="width:20%">Piece</th><th>Why it is here</th></tr>
+<tr><td><b>PostgreSQL</b></td><td>Money needs ACID transactions, foreign keys and CHECK constraints. It is the only thing allowed to be authoritative.</td></tr>
+<tr><td><b>Redis</b></td><td>Caches expensive analytics and backs the job queue. If it dies, the system gets slower, not wrong.</td></tr>
+<tr><td><b>MongoDB</b></td><td>Activity events genuinely differ in shape — a trade has symbol/quantity/price, a login does not. A relational table would be mostly NULL.</td></tr>
+<tr><td><b>BullMQ</b></td><td>Retries, exponential backoff and a visible failed set, none of which you want to hand-roll.</td></tr>
+<tr><td><b>Nginx</b></td><td>Makes “the API is stateless” a testable claim rather than an assertion.</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2 id="clone">3. From clone to running — the exact process <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 180" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10">
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#1f6feb"/></marker></defs>
+  <g>
+    <rect x="4" y="52" width="96" height="52" rx="6" fill="#fff" stroke="#1f6feb"/>
+    <text x="52" y="74" text-anchor="middle" font-weight="700">1 clone</text>
+    <text x="52" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">git clone</text>
+
+    <rect x="122" y="52" width="96" height="52" rx="6" fill="#fff" stroke="#1f6feb"/>
+    <text x="170" y="74" text-anchor="middle" font-weight="700">2 install</text>
+    <text x="170" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">npm install</text>
+
+    <rect x="240" y="52" width="96" height="52" rx="6" fill="#fff" stroke="#1f6feb"/>
+    <text x="288" y="74" text-anchor="middle" font-weight="700">3 secret</text>
+    <text x="288" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">.env + JWT</text>
+
+    <rect x="358" y="52" width="96" height="52" rx="6" fill="#e7f0fd" stroke="#1f6feb"/>
+    <text x="406" y="74" text-anchor="middle" font-weight="700">4 databases</text>
+    <text x="406" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">compose up -d</text>
+
+    <rect x="476" y="52" width="96" height="52" rx="6" fill="#fff" stroke="#1f6feb"/>
+    <text x="524" y="74" text-anchor="middle" font-weight="700">5 schema</text>
+    <text x="524" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">migrate deploy</text>
+
+    <rect x="594" y="52" width="118" height="52" rx="6" fill="#f3faf6" stroke="#127c4a"/>
+    <text x="653" y="74" text-anchor="middle" font-weight="700">6 run</text>
+    <text x="653" y="90" text-anchor="middle" font-size="8.5" fill="#5b6b7c">api + worker</text>
+
+    <path d="M100 78 L122 78" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#b)"/>
+    <path d="M218 78 L240 78" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#b)"/>
+    <path d="M336 78 L358 78" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#b)"/>
+    <path d="M454 78 L476 78" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#b)"/>
+    <path d="M572 78 L594 78" stroke="#1f6feb" stroke-width="1.6" marker-end="url(#b)"/>
+    <text x="406" y="130" text-anchor="middle" font-size="8.5" fill="#5b6b7c">only this step needs Docker</text>
+    <path d="M406 112 L406 122" stroke="#5b6b7c" stroke-width="1"/>
+  </g>
+</svg>
+<figcaption>Six steps. Steps 1–3 and 5–6 are ordinary Node work; only step 4 involves Docker.</figcaption>
+</figure>
+
+<h3>Step 0 — prerequisites</h3>
+<table>
+<tr><th style="width:26%">Need</th><th style="width:30%">Check</th><th>Install</th></tr>
+<tr><td>Node 20+</td><td><code>node -v</code></td><td><code>brew install node</code></td></tr>
+<tr><td>Container runtime</td><td><code>docker info</code></td><td><code>brew install colima docker docker-compose</code></td></tr>
+<tr><td><code>jq</code> (used in every example)</td><td><code>jq --version</code></td><td><code>brew install jq</code></td></tr>
+<tr><td>k6 (only for load tests)</td><td><code>k6 version</code></td><td><code>brew install k6</code></td></tr>
+</table>
+
+<p>Colima is the container runtime this project was built against — it is open source, has no
+GUI and no licensing questions. Start the VM once:</p>
+<pre><code>colima start --cpu 4 --memory 4 --disk 40</code></pre>
+
+<div class="callout warn">
+<p><b>One-time fix most people hit.</b> Homebrew installs <code>docker-compose</code> as a
+standalone binary, so <code>docker compose</code> (with a space) may report
+<i>unknown command</i>. Link it as a CLI plugin:</p>
+<pre><code>mkdir -p ~/.docker/cli-plugins
+ln -sfn $(brew --prefix)/opt/docker-compose/bin/docker-compose ~/.docker/cli-plugins/docker-compose
+docker compose version</code></pre>
+</div>
+
+<h3>Steps 1–3 — clone, install, configure</h3>
+<pre><code>git clone https://github.com/kanhaiyak23/FinTrack.git
+cd FinTrack
+npm install</code></pre>
+
+<div class="callout warn">
+<p><b>npm 11 blocks install scripts by default</b>, and Prisma needs its postinstall to fetch
+the query engine. If you see an <code>allow-scripts</code> warning:</p>
+<pre><code>npm approve-scripts prisma @prisma/engines @prisma/client
+npm install</code></pre>
+</div>
+
+<pre><code>cp .env.example .env
+openssl rand -hex 32        # paste the result into JWT_SECRET= inside .env</code></pre>
+
+<p>The app <b>refuses to boot</b> without a secret of at least 32 characters. That is
+deliberate: a process running with a guessable signing key is worse than one that will not
+start. You can see the refusal for yourself:</p>
+<pre class="bad"><code>Invalid environment configuration:
+  JWT_SECRET: JWT_SECRET must be at least 32 characters</code></pre>
+
+<h3>Steps 4–5 — databases and schema</h3>
+<pre><code>docker compose up -d
+docker compose ps                 # wait until all three report (healthy)
+npx prisma migrate deploy         # tables, indexes, constraints
+npx prisma generate               # the typed client</code></pre>
+
+<pre class="out"><code>SERVICE    STATUS
+mongodb    Up 5 seconds (healthy)
+postgres   Up 5 seconds (healthy)
+redis      Up 5 seconds (healthy)</code></pre>
+
+<h3>Step 6 — run it</h3>
+<p>Two terminals. Both are needed.</p>
+<pre><code># terminal 1
+npm run dev:api        # http://localhost:4000
+
+# terminal 2
+npm run dev:worker     # no port — this is what updates analytics</code></pre>
+
+<pre class="out"><code>[13:12:31] INFO: mongodb connected
+[13:12:31] INFO: fintrack api listening
+    port: 4000  env: "development"</code></pre>
+
+<p>Confirm everything is talking to everything:</p>
+<pre><code>curl -s http://localhost:4000/health | jq</code></pre>
+<pre class="out"><code>{
+  "status": "ok",
+  "instance": "api-local",
+  "uptimeSeconds": 1,
+  "checks": {
+    "postgres": { "status": "up", "latencyMs": 1.28 },
+    "mongodb":  { "status": "up", "latencyMs": 1.24 },
+    "redis":    { "status": "up", "latencyMs": 0.89 }
+  }
+}</code></pre>
+</div>
+
+<div class="section">
+<h2 id="modes">4. The two ways to run it <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 260" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10.5">
+  <rect x="6" y="6" width="348" height="248" rx="8" fill="#f3faf6" stroke="#b6e0c8"/>
+  <text x="180" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#127c4a">MODE A — developing</text>
+  <text x="180" y="47" text-anchor="middle" font-size="9" fill="#5b6b7c">docker compose up -d</text>
+  <rect x="34" y="62" width="292" height="44" rx="5" fill="#fff" stroke="#127c4a"/>
+  <text x="180" y="82" text-anchor="middle">API (npm) :4000 · Worker (npm)</text>
+  <text x="180" y="98" text-anchor="middle" font-size="9" fill="#5b6b7c">hot reload, breakpoints, instant edits</text>
+  <rect x="34" y="118" width="292" height="40" rx="5" fill="#e7f0fd" stroke="#1f6feb"/>
+  <text x="180" y="143" text-anchor="middle">Postgres · MongoDB · Redis (Docker)</text>
+  <text x="180" y="184" text-anchor="middle" font-size="9.5" fill="#16202b">Base URL: http://localhost:4000</text>
+  <text x="180" y="204" text-anchor="middle" font-size="9" fill="#5b6b7c">1 API instance · 1 worker · no Nginx</text>
+  <text x="180" y="228" text-anchor="middle" font-size="9" fill="#127c4a">Use this 95% of the time</text>
+
+  <rect x="366" y="6" width="348" height="248" rx="8" fill="#e7f0fd" stroke="#bcd4f7"/>
+  <text x="540" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#1f6feb">MODE B — demonstrating</text>
+  <text x="540" y="47" text-anchor="middle" font-size="9" fill="#5b6b7c">--profile app --scale api=3 --scale worker=2</text>
+  <rect x="394" y="62" width="292" height="26" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="540" y="79" text-anchor="middle">Nginx :8080</text>
+  <rect x="394" y="96" width="92" height="30" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="440" y="116" text-anchor="middle" font-size="9.5">API 1</text>
+  <rect x="494" y="96" width="92" height="30" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="540" y="116" text-anchor="middle" font-size="9.5">API 2</text>
+  <rect x="594" y="96" width="92" height="30" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="640" y="116" text-anchor="middle" font-size="9.5">API 3</text>
+  <rect x="394" y="134" width="140" height="28" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="464" y="152" text-anchor="middle" font-size="9.5">Worker 1</text>
+  <rect x="546" y="134" width="140" height="28" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="616" y="152" text-anchor="middle" font-size="9.5">Worker 2</text>
+  <rect x="394" y="170" width="292" height="26" rx="5" fill="#f3faf6" stroke="#127c4a"/>
+  <text x="540" y="188" text-anchor="middle" font-size="9.5">Postgres · MongoDB · Redis</text>
+  <text x="540" y="216" text-anchor="middle" font-size="9.5" fill="#16202b">Base URL: http://localhost:8080</text>
+  <text x="540" y="236" text-anchor="middle" font-size="9" fill="#5b6b7c">everything containerised, real topology</text>
+</svg>
+<figcaption>Mode A for writing code. Mode B for showing someone that it scales.</figcaption>
+</figure>
+
+<table>
+<tr><th style="width:30%"></th><th>Mode A — local</th><th>Mode B — full stack</th></tr>
+<tr><td>Command</td><td><code>npm run dev:api</code> + <code>dev:worker</code></td><td><code>docker compose --profile app up -d</code></td></tr>
+<tr><td>Base URL</td><td><code>localhost:4000</code></td><td><code>localhost:8080</code></td></tr>
+<tr><td>Code changes</td><td>instant reload</td><td>needs an image rebuild</td></tr>
+<tr><td>Instances</td><td>1 API, 1 worker</td><td>3 API, 2 workers, Nginx</td></tr>
+<tr><td>Good for</td><td>writing and debugging</td><td>demoing, load testing, scaling proof</td></tr>
+</table>
+
+<div class="callout bad">
+<p><b>Never run both at once, and stop Mode B before running tests.</b> They share one
+Postgres and one Redis, so a containerised worker will silently consume the jobs your local
+worker or your test suite is waiting on. This cost me real debugging time — five queue tests
+failed with no apparent cause.</p>
+<pre><code>docker compose --profile app stop api worker nginx</code></pre>
+</div>
+</div>
+
+<div class="section">
+<h2 id="features">5. Feature walkthrough with real output <a class="toplink" href="#toc">contents ↑</a></h2>
+<p class="small muted">Set this up once; every block below reuses <code>$TOKEN</code> and <code>$ACC</code>.</p>
+
+<pre><code>API=http://localhost:4000
+
+TOKEN=$(curl -s -X POST $API/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@fintrack.dev","name":"Demo User","password":"correct-horse-battery"}' \
+  | jq -r .token)
+
+ACC=$(curl -s -X POST $API/accounts \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"accountType":"BROKERAGE"}' | jq -r .account.id)</code></pre>
+
+<h3>5.1 Authentication</h3>
+<p>Decode the token and look at what it actually carries:</p>
+<pre><code>python3 -c "import base64,json,sys;p=sys.argv[1].split('.')[1];p+='='*(-len(p)%4);print(json.dumps(json.loads(base64.urlsafe_b64decode(p)),indent=2))" "$TOKEN"</code></pre>
+<pre class="out"><code>{
+  "iat": 1789804364,
+  "exp": 1789807964,
+  "iss": "fintrack",
+  "sub": "2ced0658-cedf-4fa2-aa9a-e31a241b4658"
+}</code></pre>
+<p>Identity and nothing else. No email, no name, no role — a JWT is <i>signed</i>, not
+encrypted, so anything inside it is readable by whoever holds it.</p>
+
+<p><b>It cannot be used to discover which emails are registered:</b></p>
+<pre><code>curl -s -X POST $API/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"demo@fintrack.dev","password":"wrong"}'
+curl -s -X POST $API/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"nobody@fintrack.dev","password":"wrong"}'</code></pre>
+<pre class="out"><code>{"error":{"message":"Invalid email or password","requestId":"2a3b16c3-…"}}
+{"error":{"message":"Invalid email or password","requestId":"f8434cfb-…"}}</code></pre>
+<p>Identical status and message. The server also runs a dummy bcrypt comparison when no user
+exists, so both paths take comparable time — an identical message that returns measurably
+faster for unknown emails would leak the same fact through timing.</p>
+
+<h3>5.2 Money movement</h3>
+<pre><code>post() { curl -s -X POST $API/transactions -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' -d "$1"; }
+
+post '{"type":"DEPOSIT","accountId":"'$ACC'","amount":"100000"}'
+post '{"type":"BUY","accountId":"'$ACC'","symbol":"INFY","quantity":"10","price":"100"}'
+post '{"type":"BUY","accountId":"'$ACC'","symbol":"INFY","quantity":"10","price":"200"}'
+post '{"type":"SELL","accountId":"'$ACC'","symbol":"INFY","quantity":"5","price":"250"}'</code></pre>
+
+<p>Trade amounts come back as <code>1000.0000</code> and <code>2000.0000</code> — <b>computed
+server-side</b> as quantity × price. Sending your own <code>amount</code> on a trade is
+rejected, or a client could set its own price.</p>
+
+<p><b>Money is always a string, never a JSON number:</b></p>
+<pre><code>curl -s $API/accounts -H "Authorization: Bearer $TOKEN" | jq '.accounts[0].balance'</code></pre>
+<pre class="out"><code>"98250.0000"     ← quoted</code></pre>
+<p>JSON numbers are IEEE-754 doubles. A client parsing <code>12345678.91</code> can silently
+receive something else, so every monetary value crosses the wire as a decimal string.</p>
+
+<p><b>Overdraft refused:</b></p>
+<pre><code>post '{"type":"WITHDRAWAL","accountId":"'$ACC'","amount":"9999999"}' | jq</code></pre>
+<pre class="out"><code>{
+  "error": {
+    "message": "Insufficient funds",
+    "details": ["available 98250.0000, required 9999999.0000"],
+    "requestId": "54fb62de-…"
+  }
+}</code></pre>
+
+<p><b>Short selling refused:</b></p>
+<pre class="out"><code>"Insufficient holdings"
+"TCS: holding 0.00000000, attempted to sell 1.00000000"</code></pre>
+
+<p><b>A deposit carrying trade fields is refused</b>, not silently ignored — an unexpected
+field on a money movement means the client believes it is doing something the server is not.</p>
+
+<h3>5.3 Analytics</h3>
+<p>Wait two seconds after writing; a worker updates these, not the request.</p>
+<pre><code>curl -s $API/analytics/portfolio -H "Authorization: Bearer $TOKEN" | jq</code></pre>
+<pre class="out"><code>{
+  "cash": { "total": "98750.0000", "accounts": 1 },
+  "holdings": [{
+    "symbol": "INFY",
+    "quantity": "15.00000000",
+    "averageBuyPrice": "150.0000",
+    "costBasis": "2250.0000",
+    "realizedPnl": "500.0000"
+  }],
+  "totals": { "symbols": 1, "costBasis": "2250.0000",
+              "marketValue": null, "unrealizedPnl": null }
+}</code></pre>
+
+<div class="callout ok">
+<p><b>Check the arithmetic yourself — this is the number to be able to defend.</b></p>
+<p>Bought 10 @ 100 and 10 @ 200 → 20 units costing 3,000 → average <b>150</b>.<br>
+Sold 5 @ 250 → realised (250 − 150) × 5 = <b>500</b>.<br>
+Left with 15 units at a basis of 3,000 − (5 × 150) = <b>2,250</b>.</p>
+</div>
+
+<p><code>marketValue</code> and <code>unrealizedPnl</code> are <code>null</code> on purpose.
+There is no price feed, and a number derived from cost basis would look like a valuation
+without being one. The P&amp;L endpoint states <code>"method": "WEIGHTED_AVERAGE"</code> so a
+consumer never has to guess which cost-basis rule produced the figure.</p>
+
+<h3>5.4 Activity history — and why MongoDB is here</h3>
+<pre><code>curl -s "$API/activity?limit=10" -H "Authorization: Bearer $TOKEN" \
+  | jq -r '.events[] | "\(.eventType)  \(.entityType)"'</code></pre>
+<pre class="out"><code>TRADE_EXECUTED       transaction
+TRADE_EXECUTED       transaction
+DEPOSIT_COMPLETED    transaction
+LOGIN                user
+USER_REGISTERED      user</code></pre>
+
+<p>Now look at the <code>metadata</code> of each. A trade carries <code>symbol</code>,
+<code>quantity</code>, <code>price</code>. A registration carries an <code>email</code>. A
+plan carries a <code>frequency</code>. One relational table holding all of those would be
+mostly NULL columns — <b>that is the concrete answer to “why not just use Postgres JSONB?”</b>:
+this collection needs no joins and no transactions, so it gains nothing from being relational.</p>
+
+<h3>5.5 Reports — the async boundary made visible</h3>
+<pre><code>TODAY=$(date +%F)
+curl -s -i "$API/reports/daily?date=$TODAY" -H "Authorization: Bearer $TOKEN" \
+  | grep -iE '^HTTP|retry-after'</code></pre>
+<pre class="out"><code>HTTP/1.1 202 Accepted
+retry-after: 10</code></pre>
+
+<p><b>202, not 404.</b> The report does not exist yet — and asking for it queued its
+generation. Ask again a few seconds later:</p>
+<pre class="out"><code>{
+  "transactionCount": 7,
+  "tradingVolume": "4250.0000",
+  "deposits": "100600.0000",
+  "withdrawals": "60.0000",
+  "buyValue": "3000.0000",
+  "sellValue": "1250.0000",
+  "realizedPnl": "500.0000",
+  "activeInvestmentPlans": 0,
+  "activityEvents": 8,
+  "activeDays": 1,
+  "openPositions": 1,
+  "timezone": "Asia/Kolkata"
+}</code></pre>
+<p class="small muted">Your figures will differ — they reflect what you posted. What matters
+is that they come from pre-aggregated tables rather than a scan, and that
+<code>timezone</code> states which day boundary was used.</p>
+</div>
+
+<div class="section">
+<h2 id="guarantees">6. The six guarantees, and how to prove each <a class="toplink" href="#toc">contents ↑</a></h2>
+<p>These are the properties worth demonstrating in an interview. Each one is <i>observable</i>,
+not asserted.</p>
+
+<table class="nobreak">
+<tr><th style="width:5%">#</th><th style="width:38%">Guarantee</th><th>How you see it</th></tr>
+<tr><td>6.1</td><td>A retried POST creates one transaction</td><td><code>201</code> then <code>200</code>; five concurrent retries return identical ids</td></tr>
+<tr><td>6.2</td><td>Concurrent withdrawals cannot both pass</td><td>two × 60 against 100 → one <code>201</code>, one <code>422</code>, balance <code>40.0000</code></td></tr>
+<tr><td>6.3</td><td>Redis failing costs latency, not correctness</td><td>stop Redis → still <code>200</code>, same figures, <code>x-cache: MISS</code></td></tr>
+<tr><td>6.4</td><td>An event is never lost between commit and queue</td><td>stop worker → row waits in the outbox → restart → drains to 0</td></tr>
+<tr><td>6.5</td><td>The same event twice changes nothing twice</td><td><code>processed_events</code> ledger / Mongo unique index</td></tr>
+<tr><td>6.6</td><td>Aggregates are order-independent</td><td>three trades fired concurrently still give 2250 / 500</td></tr>
+</table>
+
+<h3>6.1 Idempotency</h3>
+<pre><code>KEY="demo-$(date +%s)"
+curl -s -o /dev/null -w 'first:  %{http_code}\n' -X POST $API/transactions \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $KEY" -d '{"type":"DEPOSIT","accountId":"'$ACC'","amount":"500"}'
+curl -s -o /dev/null -w 'second: %{http_code}\n' -X POST $API/transactions \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $KEY" -d '{"type":"DEPOSIT","accountId":"'$ACC'","amount":"500"}'</code></pre>
+<pre class="out"><code>first:  201
+second: 200</code></pre>
+<p><b>200, not 201.</b> A <code>201</code> would claim a second transaction was created —
+exactly what idempotency prevented. The body is the original transaction with
+<code>"replayed": true</code>.</p>
+
+<p>Now under real concurrency — five simultaneous retries of one key:</p>
+<pre><code>KEY="race-$(date +%s)"
+for i in 1 2 3 4 5; do
+  curl -s -X POST $API/transactions -H "Authorization: Bearer $TOKEN" \
+    -H 'Content-Type: application/json' -H "Idempotency-Key: $KEY" \
+    -d '{"type":"DEPOSIT","accountId":"'$ACC'","amount":"250"}' | jq -r .transaction.id &
+done; wait</code></pre>
+<p>Five identical ids. One transaction, one balance movement. Two mechanisms are at work: a
+lookup inside the row lock catches sequential retries, and a unique index catches the
+concurrent ones — one request loses that race and is resolved to the winner's row.</p>
+
+<h3>6.2 Lost updates</h3>
+<pre><code>for i in 1 2; do
+  curl -s -o /dev/null -w "%{http_code}\n" -X POST $API/transactions \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"type":"WITHDRAWAL","accountId":"'$ACC2'","amount":"60"}' &
+done; wait</code></pre>
+<pre class="out"><code>201
+422
+final balance: 40.0000</code></pre>
+<p>Without <code>SELECT … FOR UPDATE</code> both requests read a balance of 100, both conclude
+60 is affordable, and the account lands at −20. The lock serialises them; the
+<code>CHECK (balance &gt;= 0)</code> constraint is the database-level backstop if the service
+is ever wrong.</p>
+
+<h3>6.3 Cache failure</h3>
+<figure class="nobreak">
+<svg viewBox="0 0 720 150" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10">
+  <defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#5b6b7c"/></marker></defs>
+  <rect x="8" y="50" width="94" height="40" rx="5" fill="#fff" stroke="#5b6b7c"/>
+  <text x="55" y="74" text-anchor="middle">request</text>
+  <path d="M102 70 L150 70" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#c)"/>
+  <rect x="152" y="50" width="120" height="40" rx="5" fill="#fdf8ef" stroke="#9a5b00"/>
+  <text x="212" y="66" text-anchor="middle">Redis GET</text>
+  <text x="212" y="81" text-anchor="middle" font-size="8.5" fill="#5b6b7c">wrapped in try/catch</text>
+
+  <path d="M272 60 L330 30" stroke="#127c4a" stroke-width="1.4" marker-end="url(#c)"/>
+  <text x="300" y="34" font-size="8.5" fill="#127c4a">hit</text>
+  <rect x="332" y="14" width="150" height="32" rx="5" fill="#f3faf6" stroke="#127c4a"/>
+  <text x="407" y="34" text-anchor="middle" font-size="9.5">return · x-cache: HIT</text>
+
+  <path d="M272 80 L330 108" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#c)"/>
+  <text x="290" y="104" font-size="8.5" fill="#5b6b7c">miss OR error</text>
+  <rect x="332" y="92" width="150" height="32" rx="5" fill="#f3faf6" stroke="#127c4a"/>
+  <text x="407" y="112" text-anchor="middle" font-size="9.5">compute from Postgres</text>
+  <path d="M482 108 L540 108" stroke="#5b6b7c" stroke-width="1.4" marker-end="url(#c)"/>
+  <rect x="542" y="92" width="168" height="32" rx="5" fill="#f3faf6" stroke="#127c4a"/>
+  <text x="626" y="112" text-anchor="middle" font-size="9.5">return · x-cache: MISS</text>
+  <text x="626" y="140" text-anchor="middle" font-size="8.5" fill="#5b6b7c">identical payload either way</text>
+</svg>
+<figcaption>A cache miss and a cache outage are the same thing from the caller's point of view.</figcaption>
+</figure>
+
+<pre><code>docker compose stop redis
+curl -s -o /dev/null -w 'status: %{http_code}\n' $API/analytics/portfolio -H "Authorization: Bearer $TOKEN"
+curl -s $API/health | jq '.status, .checks.redis.status'
+docker compose start redis</code></pre>
+<pre class="out"><code>status: 200
+"ok"
+"down"</code></pre>
+<p>Still <code>200</code>, same correct figures, and <code>/health</code> reports healthy
+overall with Redis marked down. Postgres down is the opposite — <code>503</code> — because
+nothing can be served correctly without the source of truth.</p>
+
+<h3>6.4 The outbox</h3>
+<figure class="nobreak">
+<svg viewBox="0 0 720 168" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10">
+  <defs><marker id="d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+    <path d="M0 0 L10 5 L0 10 z" fill="#5b6b7c"/></marker></defs>
+  <rect x="10" y="20" width="250" height="126" rx="7" fill="#f3faf6" stroke="#127c4a" stroke-dasharray="4 3"/>
+  <text x="135" y="40" text-anchor="middle" font-size="10.5" font-weight="700" fill="#127c4a">ONE database transaction</text>
+  <rect x="30" y="52" width="210" height="24" rx="4" fill="#fff" stroke="#127c4a"/>
+  <text x="135" y="68" text-anchor="middle" font-size="9.5">INSERT transaction</text>
+  <rect x="30" y="82" width="210" height="24" rx="4" fill="#fff" stroke="#127c4a"/>
+  <text x="135" y="98" text-anchor="middle" font-size="9.5">UPDATE balance</text>
+  <rect x="30" y="112" width="210" height="24" rx="4" fill="#fff" stroke="#127c4a"/>
+  <text x="135" y="128" text-anchor="middle" font-size="9.5">INSERT outbox_events</text>
+
+  <path d="M260 83 L310 83" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#d)"/>
+  <text x="285" y="76" text-anchor="middle" font-size="8.5" fill="#5b6b7c">COMMIT</text>
+
+  <rect x="312" y="58" width="180" height="50" rx="6" fill="#e7f0fd" stroke="#1f6feb"/>
+  <text x="402" y="78" text-anchor="middle" font-size="10">publisher polls</text>
+  <text x="402" y="94" text-anchor="middle" font-size="8.5" fill="#5b6b7c">FOR UPDATE SKIP LOCKED</text>
+
+  <path d="M492 83 L542 83" stroke="#5b6b7c" stroke-width="1.5" marker-end="url(#d)"/>
+  <rect x="544" y="44" width="166" height="34" rx="5" fill="#fff" stroke="#1f6feb"/>
+  <text x="627" y="65" text-anchor="middle" font-size="9.5">analytics queue</text>
+  <rect x="544" y="88" width="166" height="34" rx="5" fill="#fff" stroke="#6b3fa0"/>
+  <text x="627" y="109" text-anchor="middle" font-size="9.5">activity queue</text>
+  <text x="402" y="140" text-anchor="middle" font-size="8.5" fill="#5b6b7c">published_at set only after every destination accepted the job</text>
+</svg>
+<figcaption>The event and the money move in the same commit. Nothing can succeed while the other fails.</figcaption>
+</figure>
+
+<p>Stop the worker, write a transaction, and watch the event wait durably:</p>
+<pre><code>docker compose exec -T postgres psql -U fintrack -d fintrack -c \
+  "SELECT event_type, published_at FROM outbox_events WHERE published_at IS NULL;"</code></pre>
+<p>The row sits there with <code>published_at</code> NULL. Start the worker and it drains to
+zero. The event and the balance change were written in one transaction, so there is no window
+in which the money moved but the event vanished.</p>
+
+<h3>6.6 Order independence — a bug this document found</h3>
+<div class="callout bad">
+<p><b>This was a real defect, discovered while writing this guide.</b> Weighted-average cost
+basis is order-dependent, and the worker processes jobs concurrently. Three trades on one
+account were claimed within milliseconds and then raced for the holding row lock — which
+serialises the writes but does <i>not</i> order them.</p>
+<p>The result: a cost basis of <b>2,500</b> and realised P&amp;L of <b>750</b>, instead of
+2,250 and 500. Exactly what you get by applying the sale before the second purchase. Nothing
+errored; the numbers were simply plausible and wrong.</p>
+<p><b>Fix (ADR-019):</b> a trade event no longer mutates the holding. It recomputes it by
+replaying that symbol's trades from the transaction log, so the result is identical whatever
+order events arrive in — and a late event now <i>heals</i> the aggregate instead of
+corrupting it.</p>
+</div>
+
+<pre><code>for t in BUY_100 BUY_200 SELL_250; do ... done      # fire all three back to back
+sleep 4
+curl -s $API/analytics/portfolio -H "Authorization: Bearer $TOKEN" \
+  | jq '.holdings[] | select(.symbol=="WIPRO")'</code></pre>
+<pre class="out"><code>{
+  "quantity": "15.00000000",
+  "averageBuyPrice": "150.0000",
+  "costBasis": "2250.0000",
+  "realizedPnl": "500.0000"
+}</code></pre>
+<p>Must be these four values <b>every time</b>. If you ever see <code>2500</code> and
+<code>750</code>, the sale was applied before the second purchase.</p>
+</div>
+
+<div class="section">
+<h2 id="data">7. Looking inside the three databases <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<h3>PostgreSQL</h3>
+<pre><code>docker compose exec -it postgres psql -U fintrack -d fintrack</code></pre>
+<pre><code>\dt                 -- tables
+\di                 -- indexes
+\d transactions     -- one table in full, constraints included</code></pre>
+
+<p><b>The business rules the database enforces itself</b> — not the application:</p>
+<pre><code>SELECT conrelid::regclass AS "table", conname
+FROM pg_constraint WHERE contype='c' AND connamespace='public'::regnamespace ORDER BY 1;</code></pre>
+<pre class="out"><code>accounts          | chk_accounts_balance_non_negative
+investment_plans  | chk_plans_amount_positive
+subscriptions     | chk_subscriptions_ended_at
+transactions      | chk_transactions_amount_positive
+transactions      | chk_transactions_price_positive
+transactions      | chk_transactions_quantity_positive
+transactions      | chk_transactions_trade_fields</code></pre>
+
+<p><b>Try to break one by hand.</b> It should refuse — this is the demonstration that
+correctness does not depend on the application being right:</p>
+<pre><code>UPDATE accounts SET balance = -1 WHERE id = (SELECT id FROM accounts LIMIT 1);</code></pre>
+<pre class="bad"><code>ERROR:  new row violates check constraint "chk_accounts_balance_non_negative"</code></pre>
+<pre><code>INSERT INTO transactions (id, account_id, type, amount)
+VALUES (gen_random_uuid(), (SELECT id FROM accounts LIMIT 1), 'BUY', 100);</code></pre>
+<pre class="bad"><code>ERROR:  new row violates check constraint "chk_transactions_trade_fields"
+        -- a BUY with no symbol</code></pre>
+
+<p><b>Operational queries you will actually use:</b></p>
+<pre><code>-- is anything stuck in the outbox?
+SELECT event_type, count(*), count(*) FILTER (WHERE published_at IS NULL) AS unpublished
+FROM outbox_events GROUP BY 1;
+
+-- rows that keep failing to publish
+SELECT id, event_type, attempts, last_error FROM outbox_events
+WHERE published_at IS NULL AND attempts > 0;
+
+-- the pre-aggregated state the analytics endpoints read
+SELECT * FROM portfolio_holdings;
+SELECT * FROM daily_user_aggregates ORDER BY day DESC LIMIT 5;</code></pre>
+
+<h3>MongoDB</h3>
+<pre><code>docker compose exec -it mongodb mongosh fintrack</code></pre>
+<pre><code>db.activity_events.countDocuments({})
+db.activity_events.find().sort({occurredAt:-1}).limit(5).pretty()
+db.activity_events.getIndexes()
+db.report_snapshots.find().pretty()</code></pre>
+<pre class="out"><code>indexes: _id_, user_time, user_type_time, event_id_unique</code></pre>
+<p><code>event_id_unique</code> is the idempotency guard for the activity writer. It cannot
+use the Postgres <code>processed_events</code> ledger, because its write and that ledger live
+in different databases and cannot share a transaction — claiming first and then failing to
+write would lose the event while the ledger insisted it was handled.</p>
+
+<h3>Redis</h3>
+<pre><code>docker compose exec -it redis redis-cli</code></pre>
+<pre><code>KEYS analytics:*                 # cached analytics, one set per user
+TTL analytics:user:&lt;id&gt;:portfolio
+KEYS bull:*                      # BullMQ queue state
+LLEN bull:analytics:wait         # queue depth — growing means workers cannot keep up</code></pre>
+</div>
+
+<div class="section">
+<h2 id="tests">8. Tests, benchmarks and load results <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<h3>The test suite</h3>
+<pre><code>docker compose up -d
+docker compose --profile app stop api worker nginx   # if the full stack is running
+npm test</code></pre>
+<pre class="out"><code>Test Suites: 11 passed, 11 total
+Tests:       153 passed, 153 total
+Time:        ~50 s</code></pre>
+
+<p>These run against <b>real</b> PostgreSQL, MongoDB and Redis. Mocks cannot demonstrate row
+locking, transaction rollback or cache fallback — the behaviour only exists against the real
+thing. They run serially because several suites truncate a shared database.</p>
+
+<p>A few of the things they assert:</p>
+<table>
+<tr><th style="width:52%">Test</th><th>Why it matters</th></tr>
+<tr><td>A forced failure mid-transaction rolls back the balance <i>and</i> the outbox row</td><td>Proven with a real <code>NUMERIC</code> overflow, not a mock</td></tr>
+<tr><td>Two concurrent withdrawals: exactly one succeeds</td><td>The lost-update race, run for real</td></tr>
+<tr><td>Five simultaneous retries of one key → one transaction</td><td>Idempotency under contention, not just sequentially</td></tr>
+<tr><td>Analytics correct with Redis genuinely stopped</td><td>The container is stopped, not a client mocked to throw</td></tr>
+<tr><td>Three trades applied in reverse order → correct state</td><td>Regression guard for the ADR-019 bug</td></tr>
+</table>
+
+<h3>Index benchmark</h3>
+<pre><code>npm run seed -- --users=200 --transactions=500000        # ~30 s
+docker compose exec -T postgres psql -U fintrack -d fintrack -f db/benchmark/explain.sql</code></pre>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 160" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10.5">
+  <text x="14" y="22" font-size="11" font-weight="700">Transaction history query · 500,018 rows</text>
+  <text x="14" y="58" font-size="10">with index</text>
+  <rect x="110" y="44" width="10" height="20" fill="#127c4a"/>
+  <text x="130" y="59" font-size="10" font-weight="700" fill="#127c4a">0.153 ms</text>
+  <text x="230" y="59" font-size="9" fill="#5b6b7c">Index Scan · 23 buffers · no sort</text>
+
+  <text x="14" y="104" font-size="10">without it</text>
+  <rect x="110" y="90" width="470" height="20" fill="#b42318"/>
+  <text x="592" y="105" font-size="10" font-weight="700" fill="#b42318">38.078 ms</text>
+  <text x="120" y="128" font-size="9" fill="#5b6b7c">Bitmap Heap Scan → top-N heapsort · 2,246 buffers · reads 2,665 rows to return 20</text>
+  <text x="14" y="150" font-size="9.5" fill="#16202b">≈ 249× faster, ≈ 98× fewer buffers touched</text>
+</svg>
+<figcaption>The index is dropped inside a transaction that is rolled back, so a failed run cannot leave it missing.</figcaption>
+</figure>
+
+<p>The interesting part is that the slow plan is <b>not</b> a sequential scan. Postgres falls
+back to the idempotency index, which also starts with <code>account_id</code>, finds the
+2,665 matching rows, then has to read every one from the heap and sort them to return 20. The
+cost is in reading the rows, not in finding them.</p>
+
+<h3>Load tests</h3>
+<pre><code>docker compose --profile app up -d --scale api=3 --scale worker=2
+k6 run load/smoke.js          # is the stack wired up?
+k6 run load/read-heavy.js     # cached analytics
+k6 run load/write-heavy.js    # deposits under lock contention</code></pre>
+
+<table>
+<tr><th>Scenario</th><th>Throughput</th><th>p50</th><th>p95</th><th>Failed</th></tr>
+<tr><td>Read-heavy (cached analytics, 20 VUs)</td><td><b>5,107 req/s</b></td><td>2.72 ms</td><td>6.46 ms</td><td>0.000%</td></tr>
+<tr><td>Write-heavy (deposits, one account, 10 VUs)</td><td><b>361 req/s</b></td><td>9.09 ms</td><td>94.22 ms</td><td>0.000%</td></tr>
+</table>
+<p>The write run produced <b>16,437 outbox rows</b>, which two workers drained to a backlog of
+<b>zero</b>.</p>
+
+<div class="callout warn">
+<p><b>What these numbers are not.</b> The load generator shares four CPU cores with the entire
+stack, so they are a floor rather than a ceiling. The read test runs at a 100% cache hit rate
+against a single user — it measures the cached path, which is the point of the cache and also
+the limit of the number. 500k rows fit comfortably in page cache at this VM size; behaviour at
+50M rows is untested. None of it is a capacity claim.</p>
+<p class="small">Recording those caveats beside the figures is the difference between a
+measurement and a marketing number.</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="scale">9. Scaling it and proving it scaled <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<pre><code>docker compose --profile app up -d --scale api=3 --scale worker=2</code></pre>
+
+<h3>Prove requests actually distribute</h3>
+<pre><code>for i in $(seq 1 30); do
+  curl -s -D - -o /dev/null http://localhost:8080/health | grep -i '^x-instance-id'
+done | sort | uniq -c</code></pre>
+<pre class="out"><code>  10 x-instance-id: api-bfa969b0a202
+  10 x-instance-id: api-d8b2ad8002a8
+  10 x-instance-id: api-ebcbc4688633</code></pre>
+<p>Each container reports its own hostname. An even split across three instances.</p>
+
+<h3>Prove the API is stateless</h3>
+<p>A token issued by one instance is accepted by all of them — nothing session-related is held
+in process memory, which is what lets any instance serve any request:</p>
+<pre class="out"><code>HTTP/1.1 200 OK  x-instance-id: api-bfa969b0a202
+HTTP/1.1 200 OK  x-instance-id: api-d8b2ad8002a8
+HTTP/1.1 200 OK  x-instance-id: api-ebcbc4688633
+…</code></pre>
+
+<h3>Prove two workers do not double-process</h3>
+<pre><code>docker compose exec -T postgres psql -U fintrack -d fintrack -c \
+  "SELECT count(*) AS outbox FROM outbox_events;
+   SELECT processor, count(*) FROM processed_events GROUP BY 1;"</code></pre>
+<p>Each event appears once per processor, never twice. The publisher claims rows with
+<code>FOR UPDATE SKIP LOCKED</code>, so two publishers take <b>disjoint</b> sets rather than
+both grabbing the head of the backlog.</p>
+
+<figure class="nobreak">
+<svg viewBox="0 0 720 150" width="100%" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial" font-size="10">
+  <text x="14" y="20" font-size="11" font-weight="700">Why SKIP LOCKED matters with two publishers</text>
+  <rect x="14" y="34" width="150" height="96" rx="6" fill="#f0f5fa" stroke="#d9e1ea"/>
+  <text x="89" y="52" text-anchor="middle" font-size="9.5" font-weight="700">outbox backlog</text>
+  <rect x="28" y="60" width="122" height="15" rx="2" fill="#fff" stroke="#5b6b7c"/><text x="89" y="72" text-anchor="middle" font-size="8">row 1</text>
+  <rect x="28" y="79" width="122" height="15" rx="2" fill="#fff" stroke="#5b6b7c"/><text x="89" y="91" text-anchor="middle" font-size="8">row 2</text>
+  <rect x="28" y="98" width="122" height="15" rx="2" fill="#fff" stroke="#5b6b7c"/><text x="89" y="110" text-anchor="middle" font-size="8">row 3</text>
+
+  <path d="M164 74 L216 60" stroke="#1f6feb" stroke-width="1.4"/>
+  <path d="M164 96 L216 110" stroke="#6b3fa0" stroke-width="1.4"/>
+  <rect x="218" y="44" width="150" height="32" rx="5" fill="#e7f0fd" stroke="#1f6feb"/>
+  <text x="293" y="64" text-anchor="middle" font-size="9.5">Worker 1 takes 1, 2</text>
+  <rect x="218" y="94" width="150" height="32" rx="5" fill="#f6f0fb" stroke="#6b3fa0"/>
+  <text x="293" y="114" text-anchor="middle" font-size="9.5">Worker 2 takes 3</text>
+
+  <text x="400" y="62" font-size="9.5" fill="#127c4a">✓ disjoint sets — each row published once</text>
+  <text x="400" y="82" font-size="9.5" fill="#b42318">✗ without SKIP LOCKED: worker 2 blocks,</text>
+  <text x="400" y="98" font-size="9.5" fill="#b42318">&nbsp;&nbsp; or both claim the same head rows</text>
+  <text x="400" y="122" font-size="9" fill="#5b6b7c">This is what makes --scale worker=2 safe.</text>
+</svg>
+</figure>
+
+<p>Scale the workers alone when the queue backs up but request latency is fine — that
+independence is the concrete reason the API and worker are separate processes:</p>
+<pre><code>docker compose --profile app up -d --scale worker=4</code></pre>
+</div>
+
+<div class="section">
+<h2 id="trouble">10. Troubleshooting <a class="toplink" href="#toc">contents ↑</a></h2>
+
+<table>
+<tr><th style="width:34%">Symptom</th><th style="width:30%">Cause</th><th>Fix</th></tr>
+<tr><td><code>JWT_SECRET must be at least 32 characters</code></td><td><code>.env</code> missing or unset</td><td><code>openssl rand -hex 32</code>, paste into <code>.env</code></td></tr>
+<tr><td><code>@prisma/client did not initialize</code></td><td>Client not generated</td><td><code>npx prisma generate</code></td></tr>
+<tr><td><code>allow-scripts</code> warning, Prisma fails</td><td>npm 11 blocks install scripts</td><td><code>npm approve-scripts prisma @prisma/engines @prisma/client</code></td></tr>
+<tr><td><code>docker: unknown command: compose</code></td><td>Homebrew compose not linked as a plugin</td><td>see the symlink in <a href="#clone">section 3</a></td></tr>
+<tr><td><code>Cannot connect to the Docker daemon</code></td><td>Colima not running</td><td><code>colima start --cpu 4 --memory 4 --disk 40</code></td></tr>
+<tr><td><b>Analytics stay empty</b></td><td><b>The worker is not running</b></td><td><code>npm run dev:worker</code></td></tr>
+<tr><td>Analytics stale by a few seconds</td><td>Normal — eventually consistent by design</td><td>wait, or read the worker log</td></tr>
+<tr><td>Tests fail with odd queue counts</td><td>A containerised worker is eating the jobs</td><td><code>docker compose --profile app stop api worker nginx</code></td></tr>
+<tr><td><code>unpublished</code> count keeps growing</td><td>Worker down, or Redis unreachable</td><td>check the worker log and <code>docker compose ps</code></td></tr>
+<tr><td>Port 4000 or 8080 already in use</td><td>An earlier run is still alive</td><td><code>lsof -ti:4000 | xargs kill</code></td></tr>
+<tr><td>Cost basis looks wrong (2500 / 750)</td><td>Pre-ADR-019 build</td><td><code>git pull</code> — fixed in <code>8b7004a</code></td></tr>
+</table>
+
+<h3>Start over with clean data</h3>
+<pre><code>docker compose down -v          # -v deletes the volumes and all data
+docker compose up -d
+npx prisma migrate deploy</code></pre>
+
+<h3>Read the logs</h3>
+<pre><code>docker compose logs -f worker
+docker compose logs -f api
+docker compose logs -f nginx</code></pre>
+
+<h3>Shut everything down</h3>
+<pre><code>docker compose down                  # keeps data in volumes
+docker compose --profile app down    # also stops api/worker/nginx
+docker compose down -v               # deletes data too
+colima stop                          # stop the VM entirely</code></pre>
+</div>
+
+<div class="section">
+<h2 id="demo">11. The 90-second demo <a class="toplink" href="#toc">contents ↑</a></h2>
+<p>If you have to show this quickly — in an interview, or to a reviewer.</p>
+
+<pre><code>docker compose --profile app up -d --scale api=3 --scale worker=2
+API=http://localhost:8080
+TOKEN=$(curl -s -X POST $API/auth/register -H 'Content-Type: application/json' \
+  -d '{"email":"demo-'$(date +%s)'@x.dev","name":"Demo","password":"correct-horse-battery"}' | jq -r .token)
+ACC=$(curl -s -X POST $API/accounts -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"accountType":"BROKERAGE"}' | jq -r .account.id)</code></pre>
+
+<table>
+<tr><th style="width:6%">#</th><th style="width:44%">Show</th><th>Say</th></tr>
+<tr><td>1</td><td><code>curl -s $API/health | jq</code></td><td>Three subsystems, probed independently. Postgres down is a 503; Redis down is not.</td></tr>
+<tr><td>2</td><td>Deposit, buy twice, sell once</td><td>Each is one database transaction: row lock, insert, balance, outbox — all or nothing.</td></tr>
+<tr><td>3</td><td><code>/analytics/portfolio</code></td><td>Updated by a worker, not by the request. The API never waited for it.</td></tr>
+<tr><td>4</td><td>Run it twice, show <code>x-cache</code></td><td>MISS then HIT. Cache-aside, 10-minute TTL, invalidated by the worker on write.</td></tr>
+<tr><td>5</td><td><code>docker compose stop redis</code>, run again</td><td>Still 200, still correct. The cache is an optimisation; Postgres is the truth.</td></tr>
+<tr><td>6</td><td><code>/activity</code></td><td>Same events from MongoDB, with per-type metadata a relational table would store as NULLs.</td></tr>
+<tr><td>7</td><td>The 30-request instance-id loop</td><td>Three instances sharing load; a token from one works on all — nothing in process memory.</td></tr>
+</table>
+
+<div class="callout ok">
+<p><b>Then say the thing that actually matters:</b></p>
+<p style="font-size:11pt"><i>“The API never waits for the worker, and the worker can be
+restarted, duplicated or crashed without losing an event or double-counting one.”</i></p>
+</div>
+
+<h3>Questions you should be ready for</h3>
+<table>
+<tr><th style="width:36%">Question</th><th>Where the answer lives</th></tr>
+<tr><td>Why PostgreSQL <i>and</i> MongoDB?</td><td><a href="#features">§5.4</a> — heterogeneous event metadata, no joins, no transactions needed</td></tr>
+<tr><td>What happens if Redis dies?</td><td><a href="#guarantees">§6.3</a> — degrades to Postgres, still 200</td></tr>
+<tr><td>How do you avoid double-processing?</td><td><a href="#guarantees">§6.5</a> — ledger in Postgres, unique index in Mongo, and why they differ</td></tr>
+<tr><td>What if the same POST arrives twice?</td><td><a href="#guarantees">§6.1</a> — two mechanisms, sequential and concurrent</td></tr>
+<tr><td>Why is the outbox worth the complexity?</td><td><a href="#guarantees">§6.4</a> — the dual-write problem, drawn</td></tr>
+<tr><td>What breaks at 100× traffic?</td><td><a href="#scale">§9</a> — API and worker scale independently; write contention is the real ceiling</td></tr>
+<tr><td>Prove the index helps</td><td><a href="#tests">§8</a> — 0.153 ms vs 38.078 ms, with the plans</td></tr>
+</table>
+
+<div style="margin-top:2.5em; padding-top:1em; border-top:1px solid var(--line)" class="small muted">
+<p><b>FinTrack</b> — <a href="https://github.com/kanhaiyak23/FinTrack">github.com/kanhaiyak23/FinTrack</a><br>
+Companion documents in the repository: <code>docs/RUNBOOK.md</code> (the text version of this
+guide), <code>docs/architecture.md</code> (design and failure modes),
+<code>docs/decisions.md</code> (19 decisions with their rejected alternatives),
+<code>postman/</code> (26 chained requests).</p>
+<p>Every command in this document was executed against the codebase before being written
+down. Three did not survive that and were corrected rather than published.</p>
+</div>
+</div>
+
+</body>
+</html>

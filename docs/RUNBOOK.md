@@ -7,6 +7,9 @@ real.
 Read [`architecture.md`](architecture.md) for *why* it is built this way. This document is
 *how to operate it*.
 
+An illustrated version of this guide, with diagrams and clickable navigation, is at
+[`FinTrack-Guide.pdf`](FinTrack-Guide.pdf) (21 pages).
+
 ---
 
 ## Contents
