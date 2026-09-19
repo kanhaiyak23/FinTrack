@@ -96,6 +96,14 @@ not trusted.
   `jest.config.js` now runs suites serially — the publisher claims every unpublished row
   in the table, so a concurrently running suite writing transactions corrupts its counts.
   90/90 tests pass.
+- **2026-09-19** — Added `docs/RUNBOOK.md`: a run-and-verify guide covering setup, both
+  run modes, every endpoint, the six hard guarantees, direct database inspection, tests,
+  benchmarks, scaling and troubleshooting. Every command in it was executed against this
+  codebase before being written down; three that did not work as first drafted were
+  corrected (macOS `base64` rejects unpadded base64url, `head -3` misses the retry-after
+  header, and `jq` was assumed without being listed as a prerequisite).
+
+  Writing it found a real bug — see the ADR-019 entry above.
 - **2026-09-19** — Workstream N complete, and with it all fourteen. Architecture document
   with the failure-mode table, README with measured figures and their caveats, and a
   26-request Postman collection that chains its own auth token and ids. Documented that

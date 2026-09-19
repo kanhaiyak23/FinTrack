@@ -64,6 +64,10 @@ outbox publisher   ──► SELECT … FOR UPDATE SKIP LOCKED ──► queues
 workers            ──► aggregates (Postgres) · activity (MongoDB) · cache invalidation
 ```
 
+**To run it and check every feature yourself, follow
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md)** — it walks the whole system end to end with the
+expected output at each step.
+
 Full diagram, consistency model and failure-mode table:
 [`docs/architecture.md`](docs/architecture.md).
 Decisions with their rejected alternatives: [`docs/decisions.md`](docs/decisions.md).
