@@ -63,6 +63,7 @@ Violating any of these is a bug, regardless of whether tests pass.
 apps/api/src/
   config/        env parsing and validation, fails fast on missing vars
   db/            prisma client, mongo client, redis client
+  docs/          OpenAPI spec served as Swagger UI at /docs (update with routes)
   middleware/    auth, error handler, request id, logging, validation
   modules/<name>/  routes -> controller -> service -> repository
   queues/        producers only; the API never processes jobs
@@ -75,6 +76,7 @@ apps/worker/src/
 prisma/          schema + migrations
 db/benchmark/    EXPLAIN ANALYZE captures
 nginx/           load balancer config
+render.yaml      Render Blueprint (see docs/deploy.md)
 load/            k6 scripts and recorded results
 tests/           integration and unit
 docs/            architecture, decisions, progress

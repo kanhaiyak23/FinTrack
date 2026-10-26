@@ -400,3 +400,32 @@ process but not across two, so it would have been slower *and* still wrong under
 `--scale worker=2`. Per-account sequence numbers with a watermark - correct, but it makes
 every event depend on its predecessor having been processed, turning one poison message
 into a stalled account.
+
+---
+
+## ADR-020 — Render demo deployment: API and worker in one free web service
+**Status:** ACCEPTED
+
+**Context.** The project is deployed to Render for demonstration. Render has no free
+background-worker tier, no MongoDB, and its free Postgres expires after 30 days. The
+worker is real (outbox publisher, analytics, activity, notifications, reports), so an
+API-only deploy would leave analytics, activity and reports permanently empty.
+
+**Decision.** One free web service runs both processes via `npm run start:render`
+(`concurrently --kill-others-on-fail`), so a crash of either restarts the container.
+Postgres is Neon (direct, non-pooled string, so `migrate deploy` and `FOR UPDATE` behave
+as locally); MongoDB is Atlas M0; Redis is Render Key Value. Migrations run in the build
+step because pre-deploy commands are unavailable on the free plan. API docs are a
+hand-written OpenAPI 3 document (`apps/api/src/docs/openapi.js`) served by
+`swagger-ui-express` at `/docs`.
+
+**Consequences.** This is a demo topology, not the design: API and worker cannot scale
+independently, and share 512 MB (hence `WORKER_CONCURRENCY=2`). The free service sleeps
+when idle, which also pauses the worker, so scheduled report jobs run late and queued
+events wait for the next request. The OpenAPI file can drift from the zod schemas and
+must be updated with route changes. The real multi-process topology remains the Dockerfiles
+and compose `app` profile.
+
+**Rejected.** A paid Render worker (cost, for a demo); Railway/Zeabur (moving the whole
+deploy, and free-tier terms are unverified); generating OpenAPI from zod (an extra
+dependency and conversion layer).

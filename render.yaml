@@ -1,0 +1,48 @@
+# Render Blueprint: New + > Blueprint, point at this repo.
+# Postgres is on Neon and MongoDB on Atlas (Render hosts neither here); Render prompts
+# for DATABASE_URL and MONGODB_URL on first deploy (see docs/deploy.md).
+services:
+  - type: web
+    name: fintrack-api
+    runtime: node
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    # --include=dev because prisma (CLI) is a devDependency and Render sets NODE_ENV=production.
+    # Migrations run in the build step: pre-deploy commands are not available on the free plan.
+    buildCommand: npm ci --include=dev && npx prisma generate && npx prisma migrate deploy
+    # API and worker share this one free service (ADR-020). --kill-others-on-fail makes
+    # Render restart the container if either process dies.
+    startCommand: npm run start:render
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: INSTANCE_ID
+        value: render
+      # Low concurrency: both processes share the free plan's 512 MB.
+      - key: WORKER_CONCURRENCY
+        value: "2"
+      # Neon DIRECT (non-pooler) string with ?sslmode=require. Direct because
+      # `prisma migrate deploy` needs session-level features the pooler lacks.
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: fintrack-redis
+          property: connectionString
+      - key: MONGODB_URL
+        sync: false
+      - key: MONGODB_DB
+        value: fintrack
+      - key: JWT_SECRET
+        generateValue: true
+
+  - type: keyvalue
+    name: fintrack-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: []   # internal connections only

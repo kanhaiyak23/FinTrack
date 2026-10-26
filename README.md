@@ -30,6 +30,8 @@ Requires Node 20+ and a container runtime. Developed against
 [Colima](https://github.com/abiosoft/colima): `brew install colima docker docker-compose`
 then `colima start --cpu 4 --memory 4 --disk 40`.
 
+API reference: Swagger UI at `/docs` (spec at `/openapi.json`). Deploying to Render: [`docs/deploy.md`](docs/deploy.md).
+
 ## API
 
 All routes except `/health` and `/auth/*` need `Authorization: Bearer <token>`.

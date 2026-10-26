@@ -1,4 +1,6 @@
 import express from 'express';
+import swaggerUi from 'swagger-ui-express';
+import { openapi } from './docs/openapi.js';
 import { healthRouter } from './modules/health/routes.js';
 import { authRouter } from './modules/auth/routes.js';
 import { usersRouter } from './modules/users/routes.js';
@@ -24,6 +26,14 @@ export const createApp = () => {
   app.use(express.json({ limit: '100kb' }));
 
   app.use(healthRouter);
+
+  // Public API reference (Swagger UI). No auth: it describes the contract, not data.
+  app.get('/openapi.json', (_req, res) => res.json(openapi));
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapi, {
+    customSiteTitle: 'FinTrack API',
+    swaggerOptions: { persistAuthorization: true },
+  }));
+  app.get('/', (_req, res) => res.redirect('/docs'));
   app.use('/auth', authRouter);
   app.use('/users', usersRouter);
   app.use('/accounts', accountsRouter);
