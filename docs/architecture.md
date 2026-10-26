@@ -134,6 +134,24 @@ The API and worker scale independently, which is the concrete reason they are se
 processes: if analytics jobs back up while request latency is fine, adding workers fixes
 it without touching the API tier.
 
+## Deployment
+
+Two topologies exist, and they are deliberately different.
+
+| | Designed (compose `app` profile) | Demo (Render, `render.yaml`) |
+| --- | --- | --- |
+| API | N instances behind Nginx | One process |
+| Worker | M instances, scaled independently | One process in the same container |
+| Postgres / Mongo / Redis | Containers | Neon / Atlas / Render Key Value |
+| Failure handling | `restart: unless-stopped` per service | `--kill-others-on-fail`, so Render restarts the container |
+| Idle behaviour | Always on | Sleeps after ~15 min, which pauses the worker too |
+
+The invariants hold in both: the worker is idempotent, so restarts and redelivery are safe,
+and the API is stateless. What the demo gives up is independent scaling and timely
+scheduled reports. Postgres uses Neon's direct (non-pooled) connection so migrations and
+`SELECT ... FOR UPDATE` behave as they do locally. Reasoning and rejected alternatives:
+ADR-020; setup steps: [`deploy.md`](deploy.md).
+
 ## Measured, not assumed
 
 Numbers live in [`../load/results/`](../load/results/) with the query, dataset size,

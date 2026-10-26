@@ -32,6 +32,18 @@ then `colima start --cpu 4 --memory 4 --disk 40`.
 
 API reference: Swagger UI at `/docs` (spec at `/openapi.json`). Deploying to Render: [`docs/deploy.md`](docs/deploy.md).
 
+## Live demo
+
+Deployed on Render: **https://fintrack-api-nxef.onrender.com** — try it in Swagger UI at
+[`/docs`](https://fintrack-api-nxef.onrender.com/docs). Register, copy the token, click
+**Authorize**, then create an account and post a transaction; analytics and activity fill
+in a few seconds later from the worker.
+
+It is a demo topology: API and worker share one free Render service, so the first request
+after idle takes 30–60 s and scheduled reports run late while it sleeps. Postgres is on
+Neon and MongoDB on Atlas. Setup and trade-offs: [`docs/deploy.md`](docs/deploy.md),
+ADR-020.
+
 ## API
 
 All routes except `/health` and `/auth/*` need `Authorization: Bearer <token>`.
@@ -135,16 +147,21 @@ numbers rather than left out of them.
 - **No delivery channel for notifications.** The processor records what would have been
   sent; nothing leaves the machine.
 - **Analytics are eventually consistent**, typically within two seconds of a write.
+- **The Render demo is not the designed topology.** One container runs both processes and
+  sleeps when idle; the multi-instance setup is the compose `app` profile.
+- **OpenAPI is hand-written** (`apps/api/src/docs/openapi.js`) and can drift from the zod
+  schemas; update it with any route change.
 - **One known flaky test**, recorded in [`docs/progress.md`](docs/progress.md) rather than
   quietly re-run.
 
 ## Layout
 
 ```
-apps/api/src/       routes → controller → service → repository, per module
+apps/api/src/       routes → controller → service → repository, per module; docs/ = OpenAPI spec
 apps/worker/src/    processors, queue wiring, aggregation services
 prisma/             schema and migrations
 nginx/              load balancer config
+render.yaml         Render Blueprint (demo deployment)
 load/               k6 scripts and recorded results
 db/benchmark/       EXPLAIN ANALYZE harness
 tests/              integration and unit

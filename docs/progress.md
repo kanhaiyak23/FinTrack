@@ -6,37 +6,30 @@ met, not merely until the code exists.
 
 **Status values:** ` ` not started · `~` in progress · `x` done · `!` blocked
 
-**Last updated:** 2026-09-19 — Workstreams A, B, C, D and G complete and verified.
+**Last updated:** 2026-10-26 — Workstreams A–N complete; workstream O (deployment and API docs) complete and smoke-tested live.
 
 ## Current state
 
-Workstreams A and B are done. Colima runs a 4 CPU / 4 GB VM; Postgres 16, MongoDB 8 and
-Redis 7 come up healthy under `docker compose`. The API boots, validates its environment,
-reports all three subsystems at `/health`, and serves register / login / me with JWT
-authentication. 25 tests pass.
+All fourteen build workstreams (A–N) are done, and the system is **deployed** at
+`https://fintrack-api-nxef.onrender.com` (Swagger UI at `/docs`). It runs as one Render
+free web service that starts the API and the worker together, with Postgres on Neon,
+MongoDB on Atlas and Redis on Render Key Value. See `docs/deploy.md` and ADR-020.
 
-B did not need C after all: the `users` table arrived with A, so authentication was
-unblocked without the rest of the schema.
+What exists: authentication, accounts, plans and subscriptions; four transaction types
+executed atomically under a row lock with client idempotency and an outbox row; a worker
+that publishes the outbox, maintains holdings and daily aggregates, records activity in
+MongoDB and builds daily/monthly report snapshots; a fail-open Redis cache; Dockerfiles,
+Nginx and compose for the multi-instance topology; seed data, an index benchmark and k6
+load tests with recorded methods; an OpenAPI 3 spec served as Swagger UI.
 
-C added the remaining seven tables with seven CHECK constraints, two partial indexes and
-the three composite indexes from the source plan.
+The deployed demo is not the designed topology. API and worker share one 512 MB container
+(`WORKER_CONCURRENCY=2`), cannot scale independently, and sleep together when idle, so
+scheduled reports run late. The designed topology is the compose `app` profile
+(`--scale api=3 --scale worker=2` behind Nginx).
 
-D implements all four transaction types inside a single database transaction with
-`SELECT ... FOR UPDATE` on the account row, client idempotency, and an outbox row written
-in the same commit.
-
-G drains the outbox. A publisher loop in the worker claims unpublished rows with
-`FOR UPDATE SKIP LOCKED`, enqueues each one onto its queue using the row id as the BullMQ
-job id, and marks `published_at` in the same transaction as the claim. Three queues
-(`analytics`, `reports`, `notifications`) exist with producers in the API and placeholder
-processors in the worker. **Those processors log and return: the real analytics and report
-logic is workstream H.**
-
-The prototype from `69efd80` has been removed from the tree (still in history, ADR-013).
-
-**Immediate next action:** none — the build is complete. Remaining known gaps are listed under Open questions and in the README's limitations section.
-real analytics and report logic. The queue topology, the idempotency helper
-(`apps/worker/src/services/idempotency.js`) and the shutdown path are already in place.
+**Immediate next action:** none required. Open items are under Open questions and in the
+README's limitations section. Keep `apps/api/src/docs/openapi.js` in step with any route
+or schema change.
 
 ## Workstreams
 
@@ -56,6 +49,7 @@ real analytics and report logic. The queue topology, the idempotency helper
 | L | Docker / Nginx | `x` | A, H | ✅ `--scale api=3 --scale worker=2` serves through Nginx |
 | M | Load testing | `x` | L | ✅ Every number carries query, dataset size, hardware, method |
 | N | Documentation | `x` | continuous | ✅ Failure-mode table documented and true of the built system |
+| O | Deployment and API docs | `x` | A–N | ✅ Live smoke test passes: health, idempotent replay, ownership 404, worker-fed analytics, activity and reports |
 
 ## Critical path
 
@@ -74,15 +68,36 @@ decision log and should be confirmed before the dependent workstream starts.
 
 ## Verified claims
 
-Nothing measured yet. Every performance number added here must carry its query, dataset
-size, hardware and method, per invariant 10. Entries with no recorded method get deleted,
-not trusted.
+Every performance number added here must carry its query, dataset size, hardware and
+method, per invariant 10. Entries with no recorded method get deleted, not trusted.
 
 | Claim | Measured | Method | Date |
 |---|---|---|---|
-| — | — | — | — |
+| History query, with vs without composite index | 0.153 ms vs 38.078 ms | 500,018 rows, `EXPLAIN ANALYZE`, index dropped in a rolled-back transaction, 4 vCPU / 4 GB Colima VM — `load/results/index-benchmark.md` | 2026-09-19 |
+| Cached analytics reads | 5,107 req/s, p95 6.46 ms, 0% failed | k6, 20 VUs, 45 s, 3 API instances behind Nginx, load generator on the same host, one user — `load/results/load-test.md` | 2026-09-19 |
+| Deposits under single-row lock contention | 361 req/s, p95 94.22 ms, 0% failed | k6, 10 VUs, 45 s, all VUs on one account — `load/results/load-test.md` | 2026-09-19 |
+| Worker drain | 16,437 outbox rows to 0 backlog | 2 worker instances, after the write run — `load/results/load-test.md` | 2026-09-19 |
+
+No performance figure has been recorded for the Render deployment. The 2026-10-26 smoke
+test checked behaviour only (see the log), not throughput or latency.
 
 ## Log
+
+- **2026-10-26** — Workstream O complete: deployed and smoke-tested. Swagger UI at `/docs`
+  from a hand-written OpenAPI 3 spec (18 paths, 22 operations, checked against the route
+  files and validated). Render Blueprint for one free web service running API and worker
+  via `concurrently --kill-others-on-fail`, Render Key Value for Redis, Neon for Postgres
+  (direct string, ADR-020), Atlas for MongoDB. Migrations run in the build step.
+  First deploy failed because `MONGODB_URL` still held Atlas's `<db_username>` placeholder
+  (the API connects to Mongo eagerly and exits on failure); reproduced locally from a clean
+  clone, fixed by correcting the credential. Live smoke test against the deployed URL:
+  `/health` all three subsystems up; a repeated `Idempotency-Key` returned 200 with
+  `replayed: true` and the same transaction id; an over-balance BUY and an over-large
+  withdrawal returned 422 with the balance unchanged; a second user reading the first
+  user's account got 404; portfolio, activity and the daily report were populated by the
+  worker within seconds, and a second portfolio read returned `x-cache: HIT`. Repo
+  history reconciled by rebasing onto the remote's workstreams E–N rather than
+  force-pushing.
 
 - **2026-09-19** — Workstream G complete. Dedicated BullMQ Redis connection per process
   (ADR-015). Three queues with `attempts: 3`, exponential backoff from 1s, and retention
